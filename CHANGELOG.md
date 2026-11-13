@@ -1,0 +1,52 @@
+# Changelog
+
+Alle nennenswerten Änderungen an postbote. Format orientiert sich an
+[Keep a Changelog](https://keepachangelog.com/de/1.1.0/); Versionen folgen
+[Semantic Versioning](https://semver.org/lang/de/).
+
+## [0.1.0] – 2026-11-13
+
+Erstes Release. Self-hosted, Postmark-kompatible Mail-Middleware mit
+Postgres-Queue und eigenem Upstream-SMTP-Relay.
+
+### Enthalten
+
+- **M0** – Repo-Scaffold: Node 22 / TypeScript (ESM), Fastify, drizzle-orm,
+  Vitest, Biome, MIT-Lizenz.
+- **M1** – DB-Schema (13 Tabellen), `POST /email`, `/email/batch`,
+  Token-Auth (`X-Postmark-Server-Token`), Sandbox `POSTMARK_API_TEST`,
+  Message-Store (Memory + Postgres), `/messages/outbound`, `/deliverystats`,
+  `/health`.
+- **M2** – Worker: Postgres-Queue mit `FOR UPDATE SKIP LOCKED`, Retry mit
+  Backoff, Bounce-Klassifikation, Webhook-Dispatcher (Basic Auth, Custom
+  Headers, `X-PM-Webhook-Trace-Id`).
+- **M3** – Mustachio-Renderer (`#each`, `#if`, `#unless`, `else`, `../../`,
+  Layouts), `/templates` CRUD + `/templates/validate`,
+  `/email/withTemplate`, `/email/batchWithTemplates`, 21 Golden-Tests.
+- **M4** – `/bounces` (Liste, Detail, Dump, Activate), `/webhooks` CRUD +
+  Verify-Flow (ErrorCode 1364), `GET /server`, CORS für die Admin-UI.
+- **M5** – SMTP-Ingress auf 2525/587, AUTH PLAIN/LOGIN mit Access/Secret-
+  Credentials, STARTTLS, `X-PM-*` Header, `SMTPApiError`-Bounce (100007).
+- **M6** – Multi-stage Dockerfile (non-root), Docker Compose mit Migration +
+  Bootstrap, rollen-bewusste Healthchecks, GitHub Actions (CI + Image-Publish
+  nach `ghcr.io/devolta-ug-haftungsbeschraenkt/postbote`), README und Doku (API, SMTP, Compose,
+  Migration), MIT-Lizenz.
+- **M7** – app01-Migrations-Toolkit: Parallel-Deploy `postbote-v2`,
+  Import-Skripte (Tokens/Templates/Layouts/Relay), Cut-Over/Rollback,
+  Logto-Switch, Smoke-Tests und Runbook. **Nur vorbereitet, nicht gegen
+  Produktion ausgeführt.**
+- **M8** – Phase 2: Message-Streams, Suppressions mit ErrorCode 406/1235,
+  Open-/Click-Tracking (Pixel + Link-Rewrite), Open-/Click-Webhooks,
+  `/stats/outbound`, Admin-UI-Seiten für Streams, Suppressions und Statistik.
+
+### Bekannte Einschränkungen
+
+- NDR-Mailbox-Ingestion, Bulk/Broadcast-Versand, Inbound-Verarbeitung und
+  Domains/Sender-Signaturen sind nicht enthalten.
+- Relay-Passwörter liegen unverschlüsselt in der DB; Webhooks haben keine
+  Signaturen (wie Postmark).
+- Ohne TLS-Zertifikat läuft der SMTP-Ingress im Plain-Modus.
+- Die Postgres-Pfade sind unit-getestet (Memory-Store), aber nicht gegen eine
+  laufende Postgres-Instanz verifiziert.
+
+[0.1.0]: https://github.com/devolta-ug-haftungsbeschraenkt/postbote/releases/tag/v0.1.0

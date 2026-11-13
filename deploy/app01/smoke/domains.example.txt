@@ -1,0 +1,5 @@
+# Eine Domain pro Zeile (# = Kommentar). DKIM-Selector via DKIM_SELECTOR.
+# Bei aar gilt strikte DMARC-Ausrichtung: Header-From-Domain == DKIM-d==Envelope-From.
+devolta.de
+example.com
+aar-domain.example

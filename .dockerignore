@@ -1,0 +1,14 @@
+node_modules
+web/node_modules
+web/dist
+dist
+.git
+.github
+.env
+.env.local
+*.log
+coverage
+DESIGN_GUIDELINES
+BAUPLAN.md
+postmark_analyse.md
+test

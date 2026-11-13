@@ -1,0 +1,155 @@
+# postbote-v2 — Parallel-Deploy auf app01 (Bauplan §6 / M7)
+#
+#   docker compose -f deploy/app01/docker-compose.app01.yml \
+#     --env-file deploy/app01/app01.env up -d
+#
+# Der Stack läuft parallel zum Legacy-System: eigener Postgres, Port 3001 intern,
+# Netz-Alias `postbote-v2`. Clients sprechen weiterhin `postbote` (Legacy), bis
+# cutover.sh den Alias umschaltet. Das interne Netz verbindet nur v2-Services;
+# die fünf externen Netze sind die Client-Netze.
+
+name: ${COMPOSE_PROJECT_NAME:-postbote-v2}
+
+x-api-networks: &api-networks
+  internal: {}
+  coolify:
+    aliases: ['${POSTBOTE_V2_ALIAS:-postbote-v2}']
+  logto1:
+    aliases: ['${POSTBOTE_V2_ALIAS:-postbote-v2}']
+  logto2:
+    aliases: ['${POSTBOTE_V2_ALIAS:-postbote-v2}']
+  logto3:
+    aliases: ['${POSTBOTE_V2_ALIAS:-postbote-v2}']
+  logto4:
+    aliases: ['${POSTBOTE_V2_ALIAS:-postbote-v2}']
+
+x-smtp-networks: &smtp-networks
+  internal: {}
+  coolify:
+    aliases: ['${POSTBOTE_V2_SMTP_ALIAS:-postbote-v2-smtp}']
+  logto1:
+    aliases: ['${POSTBOTE_V2_SMTP_ALIAS:-postbote-v2-smtp}']
+  logto2:
+    aliases: ['${POSTBOTE_V2_SMTP_ALIAS:-postbote-v2-smtp}']
+  logto3:
+    aliases: ['${POSTBOTE_V2_SMTP_ALIAS:-postbote-v2-smtp}']
+  logto4:
+    aliases: ['${POSTBOTE_V2_SMTP_ALIAS:-postbote-v2-smtp}']
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postbote
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postbote}
+      POSTGRES_DB: postbote
+    volumes:
+      - pgdata_v2:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postbote']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    image: ${POSTBOTE_IMAGE:-ghcr.io/devolta-ug-haftungsbeschraenkt/postbote:latest}
+    command: ['node', 'dist/db/migrate.js']
+    environment: &backend-env
+      POSTBOTE_DATABASE_URL: ${POSTBOTE_DATABASE_URL}
+      POSTBOTE_BOOTSTRAP_TOKEN: ${POSTBOTE_BOOTSTRAP_TOKEN}
+      POSTBOTE_TRACKING_BASE_URL: ${POSTBOTE_TRACKING_BASE_URL:-http://localhost:3001}
+      POSTBOTE_SMTP_PORTS: ''
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    image: ${POSTBOTE_IMAGE:-ghcr.io/devolta-ug-haftungsbeschraenkt/postbote:latest}
+    environment:
+      <<: *backend-env
+      POSTBOTE_ROLE: api
+    ports:
+      - '${POSTBOTE_V2_PORT:-3001}:3000'
+    volumes:
+      # Import-Quellen (tokens.env, smtp.env, templates/) — read-only.
+      - '${POSTBOTE_IMPORT_DIR:-/opt/postbote}:/opt/postbote:ro'
+    networks: *api-networks
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', '/app/healthcheck.mjs']
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 5
+
+  worker:
+    image: ${POSTBOTE_IMAGE:-ghcr.io/devolta-ug-haftungsbeschraenkt/postbote:latest}
+    environment:
+      <<: *backend-env
+      POSTBOTE_ROLE: worker
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  smtp:
+    image: ${POSTBOTE_IMAGE:-ghcr.io/devolta-ug-haftungsbeschraenkt/postbote:latest}
+    environment:
+      <<: *backend-env
+      POSTBOTE_ROLE: smtp
+      POSTBOTE_SMTP_PORTS: '2525,587'
+      # POSTBOTE_SMTP_TLS_KEY: ${POSTBOTE_SMTP_TLS_KEY:-}
+      # POSTBOTE_SMTP_TLS_CERT: ${POSTBOTE_SMTP_TLS_CERT:-}
+    ports:
+      # Parallelbetrieb: eigene Host-Ports, damit Legacy 2525/587 behält.
+      - '${POSTBOTE_V2_SMTP_PORT_1:-2526}:2525'
+      - '${POSTBOTE_V2_SMTP_PORT_2:-588}:587'
+    networks: *smtp-networks
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  ui:
+    image: ${POSTBOTE_UI_IMAGE:-ghcr.io/devolta-ug-haftungsbeschraenkt/postbote-ui:latest}
+    environment:
+      POSTBOTE_UI_API: ${POSTBOTE_API_BASE:-http://localhost:3001}
+      POSTBOTE_UI_TOKEN: ${POSTBOTE_ADMIN_TOKEN:-}
+    ports:
+      - '5174:80'
+    networks: [internal]
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  internal:
+    internal: true
+  coolify:
+    external: true
+    name: ${COOLIFY_NETWORK:-coolify}
+  logto1:
+    external: true
+    name: ${LOGTO_NETWORK_1:-logto_default}
+  logto2:
+    external: true
+    name: ${LOGTO_NETWORK_2:-logto_net2}
+  logto3:
+    external: true
+    name: ${LOGTO_NETWORK_3:-logto_net3}
+  logto4:
+    external: true
+    name: ${LOGTO_NETWORK_4:-logto_net4}
+
+volumes:
+  pgdata_v2:

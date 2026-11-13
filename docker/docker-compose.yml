@@ -1,0 +1,102 @@
+# postbote — Postgres-only stack (Bauplan §2 / M6)
+# Quickstart:  cp .env.example .env && docker compose -f docker/docker-compose.yml up -d --build
+# Dev without Docker: POSTBOTE_DEMO=1 npm run dev  (UI: cd web && npm run dev)
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postbote
+      POSTGRES_PASSWORD: postbote
+      POSTGRES_DB: postbote
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postbote']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: applies migrations + creates the first server/token. Idempotent.
+  migrate:
+    build: &backend-build
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ['node', 'dist/db/migrate.js']
+    environment: &backend-env
+      POSTBOTE_DATABASE_URL: postgres://postbote:postbote@postgres:5432/postbote
+      POSTBOTE_BOOTSTRAP_TOKEN: ${POSTBOTE_BOOTSTRAP_TOKEN:-change-me}
+      POSTBOTE_TRACKING_BASE_URL: ${POSTBOTE_TRACKING_BASE_URL:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build: *backend-build
+    environment:
+      <<: *backend-env
+      POSTBOTE_ROLE: api
+      POSTBOTE_SMTP_PORTS: ''
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', '/app/healthcheck.mjs']
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 5
+
+  worker:
+    build: *backend-build
+    environment:
+      <<: *backend-env
+      POSTBOTE_ROLE: worker
+      POSTBOTE_SMTP_PORTS: ''
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  smtp:
+    build: *backend-build
+    environment:
+      <<: *backend-env
+      POSTBOTE_ROLE: smtp
+      POSTBOTE_SMTP_PORTS: '2525,587'
+      # STARTTLS: mount PEM files and uncomment (see docs/COMPOSE.md).
+      # POSTBOTE_SMTP_TLS_KEY: /certs/smtp-key.pem
+      # POSTBOTE_SMTP_TLS_CERT: /certs/smtp-cert.pem
+    ports:
+      - '2525:2525'
+      - '587:587'
+    # volumes:
+    #   - ./certs:/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Admin-UI (Apple Design). Runtime config is injected at container start —
+  # no token is baked into the JS bundle.
+  ui:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    environment:
+      POSTBOTE_UI_API: ${POSTBOTE_UI_API:-http://localhost:3000}
+      POSTBOTE_UI_TOKEN: ${POSTBOTE_BOOTSTRAP_TOKEN:-change-me}
+    ports:
+      - '5173:80'
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

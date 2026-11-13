@@ -1,0 +1,39 @@
+[
+  {
+    "name": "logto",
+    "via": "http",
+    "token": "REPLACE_WITH_LOGTO_TOKEN",
+    "from": "no-reply@devolta.de",
+    "to": "smoke-logto@example.com",
+    "subject": "postbote smoke test (logto)"
+  },
+  {
+    "name": "aar",
+    "via": "http",
+    "token": "REPLACE_WITH_AAR_TOKEN",
+    "from": "no-replyaar@devolta.de",
+    "to": "smoke-aar@example.com",
+    "subject": "postbote smoke test (aar)"
+  },
+  {
+    "name": "desk",
+    "via": "http",
+    "token": "REPLACE_WITH_DESK_TOKEN",
+    "from": "support@devolta.de",
+    "to": "smoke-desk@example.com",
+    "subject": "postbote smoke test (desk)"
+  },
+  {
+    "name": "legacy-smtp-client",
+    "via": "smtp",
+    "from": "smtp-client@devolta.de",
+    "to": "smoke-smtp@example.com",
+    "subject": "postbote smoke test (smtp)",
+    "smtp": {
+      "host": "127.0.0.1",
+      "port": 2526,
+      "user": "REPLACE_WITH_ACCESS_KEY",
+      "pass": "REPLACE_WITH_SECRET_KEY"
+    }
+  }
+]

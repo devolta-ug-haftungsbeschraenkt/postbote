@@ -1,0 +1,27 @@
+{
+  "layouts": [
+    {
+      "alias": "base",
+      "name": "Base Layout",
+      "htmlFile": "layouts/base.html",
+      "textFile": "layouts/base.txt"
+    }
+  ],
+  "templates": [
+    {
+      "alias": "welcome",
+      "name": "Welcome",
+      "subjectFile": "welcome.subject.txt",
+      "htmlFile": "welcome.html",
+      "textFile": "welcome.txt",
+      "layoutAlias": "base"
+    },
+    {
+      "alias": "password-reset",
+      "name": "Password Reset",
+      "subject": "Passwort zurücksetzen",
+      "htmlBody": "<p>Hallo {{name}}, <a href=\"{{link}}\">hier zurücksetzen</a>.</p>",
+      "textBody": "Hallo {{name}}, Link: {{link}}"
+    }
+  ]
+}

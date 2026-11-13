@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+coverage/
+docker/certs/
+deploy/app01/app01.env
+deploy/app01/.cutover-state
+deploy/app01/.cutover-state.*
+deploy/app01/smoke/clients.json
+deploy/app01/smoke/domains.txt
+*.postbote-backup.*

@@ -1,0 +1,228 @@
+/* postbote — Layout: Global-Top-Bar, Sidebar, Content, Responsive */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Global-Top-Bar: surface-black, 44px, 12px-Links, Wortmarke ---- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 44px;
+  background: var(--color-surface-black);
+  color: var(--color-body-on-dark);
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: 0 var(--space-lg);
+  flex-shrink: 0;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.12px;
+  color: var(--color-body-on-dark);
+}
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.topbar-note {
+  color: var(--color-body-muted);
+}
+
+/* dezenter Demo-Daten-Badge im Header */
+.demo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--color-body-muted);
+  border-radius: var(--radius-pill);
+  padding: 5px 12px;
+}
+
+.demo-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-body-muted);
+}
+
+/* ---- Körper: Sidebar + Content ---- */
+
+.app-body {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+}
+
+.sidebar {
+  width: 232px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 44px;
+  height: calc(100vh - 44px);
+  overflow-y: auto;
+  background: var(--color-canvas-parchment);
+  border-right: 1px solid var(--color-hairline);
+  padding: var(--space-lg) var(--space-sm) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: var(--radius-md);
+  color: var(--color-ink-muted-80);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.29;
+  letter-spacing: -0.224px;
+  transition: transform var(--duration-settle) var(--ease-settle);
+}
+
+.nav-item:active {
+  transform: scale(0.98);
+}
+
+.nav-item--active {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  color: var(--color-ink);
+  font-weight: 600;
+  padding: 8px 13px;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: var(--space-md) 14px 0;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  max-width: 1120px;
+  padding: var(--space-xl) var(--space-xl) var(--space-section);
+}
+
+/* ---- Hero-Tile (dunkler Wechsel auf der Übersicht) ---- */
+
+.hero-tile {
+  background: var(--color-surface-tile-1);
+  color: var(--color-body-on-dark);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xxl);
+  margin-bottom: var(--space-xl);
+}
+
+.hero-tile h1 {
+  color: var(--color-body-on-dark);
+  margin-bottom: var(--space-sm);
+}
+
+.hero-lead {
+  max-width: 560px;
+}
+
+/* ---- Seitenkopf ---- */
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-lg);
+}
+
+.page-head h1 {
+  color: var(--color-ink);
+}
+
+.page-sub {
+  margin-top: var(--space-xxs);
+}
+
+/* ---- Responsive ---- */
+
+@media (max-width: 834px) {
+  .sidebar {
+    position: sticky;
+    top: 44px;
+    z-index: 40;
+    width: auto;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: var(--space-xs) var(--space-md);
+    border-right: none;
+    border-bottom: 1px solid var(--color-hairline);
+    background: rgba(245, 245, 247, 0.8);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  .nav-item {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+
+  .content {
+    padding: var(--space-lg) var(--space-md) var(--space-xxl);
+  }
+
+  .hero-tile {
+    padding: var(--space-xl);
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    padding: 0 var(--space-md);
+    gap: var(--space-sm);
+  }
+
+  .topbar-note {
+    display: none;
+  }
+
+  .content {
+    padding: var(--space-md) var(--space-sm) var(--space-xl);
+  }
+
+  .hero-tile {
+    padding: var(--space-lg);
+  }
+
+  .type-display-lg {
+    font-size: 28px;
+  }
+
+  .page-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
