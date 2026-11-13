@@ -27,6 +27,7 @@ keine externen Abhängigkeiten ausser deinem eigenen Mailserver.
 | SMTP-Ingress | Ports 2525/587, AUTH PLAIN/LOGIN (Access/Secret), STARTTLS, `X-PM-*` Header |
 | Streams & Suppressions | `/message-streams` CRUD/Archive, `/suppressions` Dump/Create/Delete, **ErrorCode 406/1235** |
 | Tracking & Stats | `TrackOpens`/`TrackLinks`, Open-Pixel, Click-Redirect, `Open`/`Click`-Webhooks, `/stats/outbound` |
+| Härtung | `allowedFrom`/1480, Rate-Limit/429, 10-MB-Limit, AES-256-GCM für Relay-Passwörter, Postgres-Integrationstests |
 | Worker | Postgres-Queue (`FOR UPDATE SKIP LOCKED`), Retry mit Backoff, Bounce-Klassifikation, Delivery-/Bounce-Webhooks |
 | Auth | `X-Postmark-Server-Token`, Tokens nur als SHA-256-Hash, Sandbox-Token `POSTMARK_API_TEST` |
 | Fehler | Postmark-ErrorCodes (10, 300, 402, 410, 1101, 1364, …) + `X-PM-ApiErrorCode` |
@@ -163,6 +164,8 @@ Cut-Over-Checkliste: [`docs/MIGRATION.md`](docs/MIGRATION.md).
 | `POSTBOTE_SMTP_PORTS` | `2525,587` | Leer deaktiviert SMTP-Ingress |
 | `POSTBOTE_SMTP_TLS_KEY` / `..._CERT` | – | PEM-Pfade für STARTTLS; ohne sie Plain-Modus |
 | `POSTBOTE_TRACKING_BASE_URL` | `http://localhost:3000` | Öffentliche Basis-URL für Open-Pixel/Click-Links |
+| `POSTBOTE_RATE_LIMIT_PER_MIN` | `600` | Requests/Minute pro Token; `0` = aus |
+| `POSTBOTE_SECRET_KEY` | – | AES-Key für Relay-Passwörter (`openssl rand -hex 32`); ohne Key Klartext-Legacy-Modus |
 | `POSTBOTE_MIGRATIONS_DIR` | `migrations` | Pfad zu den SQL-Migrationen |
 | `POSTBOTE_LOG_LEVEL` | `info` | Fastify-Loglevel |
 | `POSTBOTE_DEMO` | – | `1` = In-Memory-Demo |
@@ -201,7 +204,7 @@ SMTP-Ingress :2525/:587 ─────────▶ smtp role ─────
 npm ci
 npm run lint          # Biome
 npx tsc --noEmit      # Typecheck
-npm test              # Vitest (90 Tests)
+npm test              # Vitest (98 Tests + 5 Postgres-Integration in CI)
 npm run build         # tsc → dist/
 npm run db:generate   # Migration aus src/db/schema.ts erzeugen
 npm run db:migrate    # Migrationen + Bootstrap anwenden
@@ -209,7 +212,8 @@ npm run setup -- --help
 npm run import -- all /pfad/zu/opt/postbote default   # dry-run, --apply zum Schreiben
 ```
 
-CI (`.github/workflows/ci.yml`): lint → test → build → Docker-Image-Smoke-Test.
+CI (`.github/workflows/ci.yml`): lint → test → build → Docker-Image-Smoke-Test,
+parallel ein **Postgres-17-Service-Job** für die Integrationstests.
 Release-Tags `v*.*.*` publizieren `ghcr.io/devolta-ug-haftungsbeschraenkt/postbote` und
 `ghcr.io/devolta-ug-haftungsbeschraenkt/postbote-ui` (semver + `latest`).
 
@@ -233,8 +237,9 @@ Release-Tags `v*.*.*` publizieren `ghcr.io/devolta-ug-haftungsbeschraenkt/postbo
 - **Bulk/Broadcast-Versand** (`POST /email/bulk`, gemeinsamer Body + pro-
   Empfänger-Modelle), Inbound-Verarbeitung und Domains/Sender-Signaturen sind
   nicht Teil des aktuellen Umfangs.
-- **Secrets**: Relay-Passwort liegt unverschlüsselt in der DB (`password_encrypted`
-  ist derzeit ein Klartext-Feld); Verschlüsselung at rest folgt.
+- **Secrets**: Mit `POSTBOTE_SECRET_KEY` werden Relay-Passwörter per
+  AES-256-GCM verschlüsselt; ohne Key bleiben neue Werte im Klartext
+  (Kompatibilitätsmodus). Bestehende Klartextwerte bleiben immer lesbar.
 - **Keine Signaturen** bei Webhooks (wie Postmark): Absicherung über Basic Auth,
   Custom Headers oder IP-Allowlisting.
 - **Tracking-Basics**: Plattform-/Browser-/Client-Auswertung und

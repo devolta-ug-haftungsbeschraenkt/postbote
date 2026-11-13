@@ -15,6 +15,13 @@
       "when": 1794595178706,
       "tag": "0001_ambitious_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794600079427,
+      "tag": "0002_living_paladin",
+      "breakpoints": true
     }
   ]
 }

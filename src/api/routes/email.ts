@@ -1,7 +1,15 @@
-import type { FastifyInstance } from 'fastify'
-import type { MessageInput, TrackLinksMode } from '../../core/store.js'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import type { MessageInput, TokenRecord, TrackLinksMode } from '../../core/store.js'
 import { authenticate } from '../auth.js'
 import { ErrorCodes } from '../errors.js'
+import {
+  MAX_MESSAGE_BYTES,
+  RateLimiter,
+  checkPreflight,
+  checkSenderAllowed,
+  extractEmail,
+  payloadSize,
+} from '../policy.js'
 import { renderTemplate } from '../render-template.js'
 
 const MAX_BATCH = 500
@@ -41,21 +49,18 @@ function parseTracking(body: Record<string, unknown>): {
   }
 }
 
-/** Adresse aus "Name <a@b.de>" extrahieren (Suppression-Vergleich). */
-function extractEmail(value: string): string {
-  const match = /<([^>]+)>/.exec(value)
-  return (match?.[1] ?? value).trim().toLowerCase()
-}
-
 /**
- * Phase 2 (M8): Send-Policy — unbekannter/archivierter Stream → ErrorCode 1235,
- * unterdrückte Empfänger → ErrorCode 406 (Analyse 2.5).
+ * Vor dem Akzeptieren: Sender-Allowlist (1480), Stream (1235),
+ * unterdrückte Empfänger (406).
  */
 async function checkSendPolicy(
   app: FastifyInstance,
   serverId: string,
-  input: Pick<MessageInput, 'to' | 'cc' | 'bcc' | 'messageStream'>,
+  token: TokenRecord | null,
+  input: Pick<MessageInput, 'from' | 'to' | 'cc' | 'bcc' | 'messageStream'>,
 ): Promise<SendFailure | null> {
+  const sender = checkSenderAllowed(token, input.from)
+  if (sender) return sender
   const streamId = input.messageStream ?? 'outbound'
   if (streamId !== 'outbound') {
     const stream = await app.postbote.store.getStream(serverId, streamId)
@@ -97,7 +102,7 @@ export function validateMessage(body: Record<string, unknown>):
       message: string
     } {
   const from = typeof body.From === 'string' ? body.From.trim() : ''
-  if (!EMAIL_ADDRESS_RE.test(from)) {
+  if (!EMAIL_ADDRESS_RE.test(extractEmail(from))) {
     return {
       ok: false,
       errorCode: ErrorCodes.SendValidation,
@@ -224,7 +229,7 @@ export function validateEnvelope(body: Record<string, unknown>):
       message: string
     } {
   const from = typeof body.From === 'string' ? body.From.trim() : ''
-  if (!EMAIL_ADDRESS_RE.test(from)) {
+  if (!EMAIL_ADDRESS_RE.test(extractEmail(from))) {
     return {
       ok: false,
       errorCode: ErrorCodes.SendValidation,
@@ -325,10 +330,29 @@ function success(input: MessageInput, messageId: string): SendSuccess {
 }
 
 export function registerEmailRoutes(app: FastifyInstance): void {
+  const rateLimiter = new RateLimiter()
+
+  /** 429 + 10-MB-Limit vor der eigentlichen Verarbeitung (Bauplan §4). */
+  const preflight = (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    auth: { token: TokenRecord | null; sandbox: boolean },
+    skipPayloadLimit = false,
+  ): boolean => {
+    const rejection = checkPreflight(request.body, auth.token, rateLimiter, { skipPayloadLimit })
+    if (!rejection) return true
+    if (rejection.retryAfter !== undefined) {
+      reply.header('Retry-After', String(rejection.retryAfter))
+    }
+    reply.status(rejection.statusCode).send(rejection.body)
+    return false
+  }
+
   // POST /email — single send (sync accept, async delivery)
   app.post('/email', async (request, reply) => {
     const auth = await authenticate(request, reply, app.postbote.store)
     if (!auth.token && !auth.sandbox) return reply
+    if (!preflight(request, reply, auth)) return reply
 
     if (auth.sandbox) {
       // Sandbox: full validation, no persistence, no delivery.
@@ -343,7 +367,7 @@ export function registerEmailRoutes(app: FastifyInstance): void {
     if (!check.ok) {
       return reply.status(422).send({ ErrorCode: check.errorCode, Message: check.message })
     }
-    const policy = await checkSendPolicy(app, auth.token?.serverId ?? '', check.input)
+    const policy = await checkSendPolicy(app, auth.token?.serverId ?? '', auth.token, check.input)
     if (policy) return reply.status(422).send(policy)
 
     const record = await app.postbote.store.insertMessage(
@@ -360,6 +384,7 @@ export function registerEmailRoutes(app: FastifyInstance): void {
   app.post('/email/withTemplate', async (request, reply) => {
     const auth = await authenticate(request, reply, app.postbote.store)
     if (!auth.token && !auth.sandbox) return reply
+    if (!preflight(request, reply, auth)) return reply
 
     const body = request.body as Record<string, unknown>
     const envelope = validateEnvelope(body)
@@ -412,7 +437,7 @@ export function registerEmailRoutes(app: FastifyInstance): void {
       ...(rendered.textBody !== undefined && { textBody: rendered.textBody }),
     }
 
-    const policy = await checkSendPolicy(app, auth.token?.serverId ?? '', input)
+    const policy = await checkSendPolicy(app, auth.token?.serverId ?? '', auth.token, input)
     if (policy && !auth.sandbox) return reply.status(422).send(policy)
 
     const messageId = crypto.randomUUID()
@@ -432,6 +457,7 @@ export function registerEmailRoutes(app: FastifyInstance): void {
   app.post('/email/batchWithTemplates', async (request, reply) => {
     const auth = await authenticate(request, reply, app.postbote.store)
     if (!auth.token && !auth.sandbox) return reply
+    if (!preflight(request, reply, auth, true)) return reply
 
     const body = request.body as Record<string, unknown>
     const items = Array.isArray(body?.Messages) ? body.Messages : null
@@ -450,6 +476,13 @@ export function registerEmailRoutes(app: FastifyInstance): void {
 
     const results: (SendSuccess | SendFailure)[] = []
     for (const item of items) {
+      if (payloadSize(item) > MAX_MESSAGE_BYTES) {
+        results.push({
+          ErrorCode: ErrorCodes.SendValidation,
+          Message: 'Message exceeds the 10 MB limit.',
+        })
+        continue
+      }
       const record =
         typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : {}
       const envelope = validateEnvelope(record)
@@ -505,7 +538,7 @@ export function registerEmailRoutes(app: FastifyInstance): void {
         ...(rendered.textBody !== undefined && { textBody: rendered.textBody }),
       }
       if (!auth.sandbox) {
-        const policy = await checkSendPolicy(app, auth.token?.serverId ?? '', input)
+        const policy = await checkSendPolicy(app, auth.token?.serverId ?? '', auth.token, input)
         if (policy) {
           results.push(policy)
           continue
@@ -528,6 +561,7 @@ export function registerEmailRoutes(app: FastifyInstance): void {
   app.post('/email/batch', async (request, reply) => {
     const auth = await authenticate(request, reply, app.postbote.store)
     if (!auth.token && !auth.sandbox) return reply
+    if (!preflight(request, reply, auth, true)) return reply
 
     const body = request.body
     if (!Array.isArray(body)) {
@@ -544,6 +578,13 @@ export function registerEmailRoutes(app: FastifyInstance): void {
 
     const results: (SendSuccess | SendFailure)[] = []
     for (const item of body) {
+      if (payloadSize(item) > MAX_MESSAGE_BYTES) {
+        results.push({
+          ErrorCode: ErrorCodes.SendValidation,
+          Message: 'Message exceeds the 10 MB limit.',
+        })
+        continue
+      }
       const check = validateMessage(
         typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : {},
       )
@@ -553,7 +594,12 @@ export function registerEmailRoutes(app: FastifyInstance): void {
       }
       const messageId = crypto.randomUUID()
       if (!auth.sandbox) {
-        const policy = await checkSendPolicy(app, auth.token?.serverId ?? '', check.input)
+        const policy = await checkSendPolicy(
+          app,
+          auth.token?.serverId ?? '',
+          auth.token,
+          check.input,
+        )
         if (policy) {
           results.push(policy)
           continue

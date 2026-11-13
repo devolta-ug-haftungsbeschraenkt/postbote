@@ -1,5 +1,6 @@
 import { loadConfig } from '../config/env.js'
 import { PostgresMessageStore } from '../core/postgres-store.js'
+import { encryptAtRest } from '../core/secret.js'
 import { createDb } from '../db/client.js'
 import { relayConfigs } from '../db/schema.js'
 
@@ -9,8 +10,8 @@ import { relayConfigs } from '../db/schema.js'
  *   node dist/cli/setup.js create-smtp-credential [slug] [stream]
  *   node dist/cli/setup.js set-relay <host> <port> <user> <pass> [tlsMode] [slug] [stream]
  *
- * Secrets (SMTP secret key, relay password) are printed/entered once and only
- * hashes / at-rest values are persisted. See docs/COMPOSE.md.
+ * SMTP secret keys are only stored as hashes; relay passwords are encrypted
+ * at rest (POSTBOTE_SECRET_KEY) before persisting. See docs/COMPOSE.md.
  */
 const USAGE = `Usage:
   node dist/cli/setup.js create-smtp-credential [slug] [stream]
@@ -75,7 +76,7 @@ async function main(): Promise<void> {
         host,
         port,
         username,
-        passwordEncrypted: password,
+        passwordEncrypted: encryptAtRest(password),
         tlsMode,
       }
       await db
@@ -87,7 +88,7 @@ async function main(): Promise<void> {
             host,
             port,
             username,
-            passwordEncrypted: password,
+            passwordEncrypted: encryptAtRest(password),
             tlsMode,
           },
         })

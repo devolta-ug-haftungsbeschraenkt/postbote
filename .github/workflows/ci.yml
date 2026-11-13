@@ -27,6 +27,35 @@ jobs:
       - name: Build Admin-UI
         run: npm --prefix web ci && npm --prefix web run build
 
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postbote
+          POSTGRES_PASSWORD: postbote
+          POSTGRES_DB: postbote
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postbote"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Postgres integration tests
+        env:
+          POSTBOTE_TEST_DATABASE_URL: postgres://postbote:postbote@localhost:5432/postbote
+          POSTBOTE_SECRET_KEY: pg-ci-key
+        run: npx vitest run test/postgres.test.ts
+
   docker:
     runs-on: ubuntu-latest
     needs: check

@@ -4,6 +4,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -80,7 +81,8 @@ export const relayConfigs = pgTable(
 export const streams = pgTable(
   'streams',
   {
-    id: text('id').primaryKey(), // "outbound" or custom
+    /** Pro Server eindeutig; `outbound` ist der Default-Stream jedes Servers. */
+    id: text('id').notNull(),
     serverId: uuid('server_id')
       .notNull()
       .references(() => servers.id),
@@ -91,7 +93,7 @@ export const streams = pgTable(
     archived: boolean('archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('streams_server_idx').on(t.serverId)],
+  (t) => [index('streams_server_idx').on(t.serverId), primaryKey({ columns: [t.serverId, t.id] })],
 )
 
 /** Phase 2 (M8): unterdrückte Empfänger pro Server/Stream → ErrorCode 406. */

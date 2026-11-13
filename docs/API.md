@@ -28,10 +28,24 @@ Alle Endpunkte (ausser `/health`) erwarten den Header
 | 1101 | 422 | Template nicht gefunden |
 | 1235 | 422 | Message-Stream existiert nicht oder ist archiviert |
 | 1364 | 422 | Webhook-Verifikation fehlgeschlagen |
+| 429 | 429 | Rate-Limit pro Token überschritten |
+| 1480 | 422 | Absender nicht in der `allowedFrom`-Allowlist |
 | 100010 | 422 | Template-Renderfehler |
 
 Batch-Aufrufe antworten **immer mit HTTP 200** und pro Item einem `ErrorCode`
 (Postmark-Verhalten), nie mit 207/Mixed-Status.
+
+### Limits & Sender-Allowlist
+
+- **Rate-Limit**: pro Server-Token `POSTBOTE_RATE_LIMIT_PER_MIN` Requests/Minute
+  (Default 600, `0` = aus). Überschreitung → **HTTP 429**, `ErrorCode: 429`,
+  Header `Retry-After` in Sekunden.
+- **Payload**: max. **10 MB pro Nachricht** (→ 422/ErrorCode 300), max. **50 MB**
+  pro Batch-Payload. Im Batch wird ein zu grosses Item einzeln mit 300 markiert.
+- **allowedFrom**: Ein Token kann eine Sender-Allowlist tragen (exakte Adresse
+  oder `*@domain.tld`). Verstösse → **ErrorCode 1480**. Ohne Allowlist sind alle
+  Absender erlaubt.
+- `From` akzeptiert auch Anzeigenamen (`"Max <max@devolta.de>"`).
 
 ---
 

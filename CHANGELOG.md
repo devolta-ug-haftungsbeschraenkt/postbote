@@ -4,6 +4,21 @@ Alle nennenswerten Änderungen an postbote. Format orientiert sich an
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/); Versionen folgen
 [Semantic Versioning](https://semver.org/lang/de/).
 
+## [Unreleased]
+
+### Härtung
+
+- **Rate-Limit** pro Server-Token (`POSTBOTE_RATE_LIMIT_PER_MIN`, Default 600)
+  → HTTP 429 mit `Retry-After`.
+- **Sender-Allowlist** `allowedFrom` wird durchgesetzt → ErrorCode 1480;
+  `From` akzeptiert jetzt auch Anzeigenamen (`"Max <max@devolta.de>"`).
+- **Payload-Limits**: 10 MB pro Nachricht (422/300), 50 MB pro Batch,
+  übergrosse Batch-Items werden einzeln markiert.
+- **Secrets at rest**: Relay-Passwörter werden mit AES-256-GCM verschlüsselt
+  (`POSTBOTE_SECRET_KEY`), Klartext-Fallback für bestehende Daten.
+- **Postgres-Integrationstests** (`test/postgres.test.ts`) gegen Postgres 17 in
+  CI und lokal verifiziert: Migrationen und alle Store-Pfade.
+
 ## [0.1.0] – 2026-11-13
 
 Erstes Release. Self-hosted, Postmark-kompatible Mail-Middleware mit

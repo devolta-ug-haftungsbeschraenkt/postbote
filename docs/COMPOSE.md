@@ -90,6 +90,24 @@ und erlaubt Plain-AUTH (nur für Dev/trusted Networks).
 Empfänger-Clients aufgerufen. Die Endpunkte sind bewusst ohne Token. Der Worker
 verwendet die URL, um beim Versand Links umzuschreiben und das Pixel einzubetten.
 
+## Secrets at rest
+
+`POSTBOTE_SECRET_KEY` (AES-256-GCM) verschlüsselt Relay-Passwörter in
+`relay_configs`. Der Key muss **in allen Rollen identisch** sein (im Compose-Stack
+über den gemeinsamen `backend-env`-Anchor sichergestellt), **stabil** bleiben und
+mitgesichert werden — nach einem Key-Wechsel sind verschlüsselte Werte nicht mehr
+lesbar. Ohne Key schreibt postbote neue Werte im Klartext (Kompatibilität für
+bestehende Installationen); Klartextwerte bleiben immer lesbar.
+
+Erzeugen:
+
+```bash
+openssl rand -hex 32
+```
+
+`npm run setup -- set-relay ...` und `node dist/cli/import.js relay ...`
+verschlüsseln beim Schreiben automatisch.
+
 ## Admin-UI Runtime-Config
 
 Die UI wird als statisches Bundle ausgeliefert; API-URL und Token werden **beim

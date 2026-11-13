@@ -15,6 +15,10 @@ export interface PostboteConfig {
   smtpTlsCert: string
   /** Public base URL used for tracking pixel/click links (M8). */
   trackingBaseUrl: string
+  /** Requests per minute per server token; 0 disables rate limiting. */
+  rateLimitPerMinute: number
+  /** AES-256-GCM key for secrets at rest; empty = plaintext legacy mode. */
+  secretKey: string
 }
 
 function str(value: string | undefined, fallback: string): string {
@@ -49,5 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PostboteConfig
       /\/+$/,
       '',
     ),
+    rateLimitPerMinute: Number.parseInt(str(env.POSTBOTE_RATE_LIMIT_PER_MIN, '600'), 10),
+    secretKey: str(env.POSTBOTE_SECRET_KEY, ''),
   }
 }

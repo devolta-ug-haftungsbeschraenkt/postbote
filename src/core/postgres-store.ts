@@ -17,6 +17,7 @@ import {
   webhookDeliveries,
   webhooks,
 } from '../db/schema.js'
+import { decryptAtRest } from './secret.js'
 import type {
   BounceRecord,
   LayoutRecord,
@@ -240,15 +241,13 @@ export class PostgresMessageStore implements MessageStore {
       .limit(1)
     const row = rows[0]
     if (!row) return null
-    // MVP: the stored (encrypted) password is returned as-is; secret encryption
-    // at rest is a documented gap (Bauplan §8 — Secrets).
     return {
       serverId: row.serverId,
       streamId: row.streamId,
       host: row.host,
       port: row.port,
       username: row.username,
-      password: row.passwordEncrypted,
+      password: decryptAtRest(row.passwordEncrypted),
       tlsMode: row.tlsMode as RelayRecord['tlsMode'],
     }
   }
@@ -654,22 +653,25 @@ export class PostgresMessageStore implements MessageStore {
       messageStreamType: record.messageStreamType ?? existing?.messageStreamType ?? 'outbound',
       archived: record.archived ?? existing?.archived ?? false,
     }
-    if (existing) {
-      await this.db
-        .update(streams)
-        .set(values)
-        .where(and(eq(streams.serverId, serverId), eq(streams.id, record.id)))
-      return this.getStream(serverId, record.id) as Promise<StreamRecord>
-    }
-    // `streams.id` is the PK (globally unique); onConflictDoNothing keeps a
-    // concurrent insert from another server from being overwritten.
-    await this.db
+    const rows = await this.db
       .insert(streams)
       .values({ id: record.id, serverId, ...values })
-      .onConflictDoNothing()
-    const created = await this.getStream(serverId, record.id)
-    if (!created) throw new Error(`stream ${record.id} could not be created`)
-    return created
+      .onConflictDoUpdate({
+        target: [streams.serverId, streams.id],
+        set: values,
+      })
+      .returning()
+    const row = rows[0]
+    if (!row) throw new Error(`stream ${record.id} could not be upserted`)
+    return {
+      id: row.id,
+      serverId: row.serverId,
+      name: row.name,
+      description: row.description,
+      messageStreamType: row.messageStreamType,
+      archived: row.archived,
+      createdAt: row.createdAt.toISOString(),
+    }
   }
 
   async setStreamArchived(

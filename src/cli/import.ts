@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { loadConfig } from '../config/env.js'
+import { encryptAtRest } from '../core/secret.js'
 import { hashToken } from '../core/store.js'
 import { createDb } from '../db/client.js'
 import {
@@ -194,7 +195,7 @@ async function main(): Promise<void> {
             host: plan.host,
             port: plan.port,
             username: plan.username,
-            passwordEncrypted: plan.password,
+            passwordEncrypted: encryptAtRest(plan.password),
             tlsMode: plan.tlsMode,
           })
           .onConflictDoUpdate({
@@ -203,7 +204,7 @@ async function main(): Promise<void> {
               host: plan.host,
               port: plan.port,
               username: plan.username,
-              passwordEncrypted: plan.password,
+              passwordEncrypted: encryptAtRest(plan.password),
               tlsMode: plan.tlsMode,
             },
           })
