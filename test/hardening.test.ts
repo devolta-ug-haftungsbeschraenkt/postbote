@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { buildApp } from '../src/api/app.js'
 import { RateLimiter, checkPreflight, checkSenderAllowed, payloadSize } from '../src/api/policy.js'
 import { MemoryMessageStore } from '../src/core/memory-store.js'
@@ -82,8 +82,7 @@ describe('Policy-Helfer', () => {
 
 describe('API-Härtung', () => {
   it('HTTP 429 pro Token mit Retry-After', async () => {
-    const previous = process.env.POSTBOTE_RATE_LIMIT_PER_MIN
-    process.env.POSTBOTE_RATE_LIMIT_PER_MIN = '2'
+    vi.stubEnv('POSTBOTE_RATE_LIMIT_PER_MIN', '2')
     try {
       const { app } = await setup()
       const headers = { 'x-postmark-server-token': TOKEN, 'content-type': 'application/json' }
@@ -97,8 +96,7 @@ describe('API-Härtung', () => {
       expect(Number(third.headers['retry-after'])).toBeGreaterThan(0)
       await app.close()
     } finally {
-      if (previous === undefined) delete process.env.POSTBOTE_RATE_LIMIT_PER_MIN
-      else process.env.POSTBOTE_RATE_LIMIT_PER_MIN = previous
+      vi.unstubAllEnvs()
     }
   })
 

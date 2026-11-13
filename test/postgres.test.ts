@@ -1,5 +1,5 @@
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { PostgresMessageStore } from '../src/core/postgres-store.js'
 import { encryptAtRest } from '../src/core/secret.js'
 import { createDb } from '../src/db/client.js'
@@ -159,8 +159,7 @@ describe.skipIf(!url)('Postgres-Integration', () => {
   })
 
   it('Relay-Passwort verschlüsselt at rest, getRelay entschlüsselt', async () => {
-    const previous = process.env.POSTBOTE_SECRET_KEY
-    process.env.POSTBOTE_SECRET_KEY = 'pg-integration-key'
+    vi.stubEnv('POSTBOTE_SECRET_KEY', 'pg-integration-key')
     try {
       await db
         .insert(relayConfigs)
@@ -177,8 +176,7 @@ describe.skipIf(!url)('Postgres-Integration', () => {
       const relay = await store.getRelay(serverId, 'secure')
       expect(relay?.password).toBe('top-secret')
     } finally {
-      if (previous === undefined) delete process.env.POSTBOTE_SECRET_KEY
-      else process.env.POSTBOTE_SECRET_KEY = previous
+      vi.unstubAllEnvs()
     }
   })
 })
