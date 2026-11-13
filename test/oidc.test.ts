@@ -123,7 +123,8 @@ describe('OIDC / Logto Auth (docs/OIDC.md)', () => {
     configure()
     const app = await buildApp({ store, version: 'test' })
     const res = await app.inject({
-      method: 'OPTIONS', url: '/server',
+      method: 'OPTIONS',
+      url: '/server',
       headers: {
         origin: 'https://ui.example.com',
         'access-control-request-method': 'GET',
@@ -131,7 +132,9 @@ describe('OIDC / Logto Auth (docs/OIDC.md)', () => {
       },
     })
     expect(res.statusCode).toBe(204)
-    expect(String(res.headers['access-control-allow-headers']).toLowerCase()).toContain('authorization')
+    expect(String(res.headers['access-control-allow-headers']).toLowerCase()).toContain(
+      'authorization',
+    )
     await app.close()
   })
 

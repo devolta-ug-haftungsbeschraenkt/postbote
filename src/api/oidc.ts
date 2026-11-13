@@ -1,4 +1,4 @@
-import { type JsonWebKey, createPublicKey, createVerify } from 'node:crypto'
+import { type JsonWebKey, type KeyObject, createPublicKey, createVerify } from 'node:crypto'
 import { type PostboteConfig, loadConfig } from '../config/env.js'
 
 /**
@@ -131,7 +131,7 @@ export class OidcVerifier {
     }
     if (!jwk) throw new OidcError('no matching JWKS key')
 
-    let key
+    let key: KeyObject
     try {
       key = createPublicKey({ key: jwk, format: 'jwk' })
     } catch {
