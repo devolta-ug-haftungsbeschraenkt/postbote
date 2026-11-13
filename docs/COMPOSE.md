@@ -138,6 +138,10 @@ Tags `v*.*.*` publizieren via GitHub Actions:
 - `ghcr.io/devolta-ug-haftungsbeschraenkt/postbote:<version>`, `:<major>.<minor>`, `:latest`
 - `ghcr.io/devolta-ug-haftungsbeschraenkt/postbote-ui:<version>`, `:<major>.<minor>`, `:latest`
 
+Für **v0.1.0** wurde der Release manuell per `workflow_dispatch` ausgelöst; dabei
+liegen `:v0.1.0` und `:latest` in der Registry. Normale Tag-Pushes (`v*.*.*`)
+erzeugen zusätzlich die Semver-Tags `:<version>` und `:<major>.<minor>`.
+
 Multi-Arch (`linux/amd64`, `linux/arm64`). Statt `build:` kann in Compose
 `image: ghcr.io/devolta-ug-haftungsbeschraenkt/postbote:latest` verwendet werden.
 
