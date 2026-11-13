@@ -293,6 +293,10 @@ export class MemoryMessageStore implements MessageStore {
     return this.servers.get(serverId) ?? null
   }
 
+  async findServerBySlug(slug: string): Promise<ServerRecord | null> {
+    return [...this.servers.values()].find((s) => s.slug === slug) ?? null
+  }
+
   async createSmtpCredential(
     serverId: string,
     streamId = 'outbound',

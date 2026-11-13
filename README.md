@@ -28,6 +28,7 @@ keine externen Abhängigkeiten ausser deinem eigenen Mailserver.
 | Streams & Suppressions | `/message-streams` CRUD/Archive, `/suppressions` Dump/Create/Delete, **ErrorCode 406/1235** |
 | Tracking & Stats | `TrackOpens`/`TrackLinks`, Open-Pixel, Click-Redirect, `Open`/`Click`-Webhooks, `/stats/outbound` |
 | Härtung | `allowedFrom`/1480, Rate-Limit/429, 10-MB-Limit, AES-256-GCM für Relay-Passwörter, Postgres-Integrationstests |
+| **Auth via OIDC / Logto** | `Authorization: Bearer <JWT>` (JWKS, RS256/ES256, Scopes) für Menschen/Admin-UI; statische Tokens bleiben für Postmark-Clients (`POSTBOTE_AUTH_MODE`) |
 | Worker | Postgres-Queue (`FOR UPDATE SKIP LOCKED`), Retry mit Backoff, Bounce-Klassifikation, Delivery-/Bounce-Webhooks |
 | Auth | `X-Postmark-Server-Token`, Tokens nur als SHA-256-Hash, Sandbox-Token `POSTMARK_API_TEST` |
 | Fehler | Postmark-ErrorCodes (10, 300, 402, 410, 1101, 1364, …) + `X-PM-ApiErrorCode` |
@@ -166,6 +167,11 @@ Cut-Over-Checkliste: [`docs/MIGRATION.md`](docs/MIGRATION.md).
 | `POSTBOTE_TRACKING_BASE_URL` | `http://localhost:3000` | Öffentliche Basis-URL für Open-Pixel/Click-Links |
 | `POSTBOTE_RATE_LIMIT_PER_MIN` | `600` | Requests/Minute pro Token; `0` = aus |
 | `POSTBOTE_SECRET_KEY` | – | AES-Key für Relay-Passwörter (`openssl rand -hex 32`); ohne Key Klartext-Legacy-Modus |
+| `POSTBOTE_AUTH_MODE` | `both` | `both` (OIDC + Token) · `oidc` · `token` |
+| `POSTBOTE_OIDC_ISSUER` / `..._AUDIENCE` | – | Logto-Issuer / API-Resource |
+| `POSTBOTE_OIDC_REQUIRED_SCOPE` | – | Pflicht-Scope, z. B. `postbote:admin` |
+| `POSTBOTE_OIDC_SERVER_SLUG` | `default` | Server-Scope für OIDC-Principals |
+| `POSTBOTE_UI_OIDC_ISSUER` / `..._CLIENT_ID` | – | Logto-PKCE-Login der Admin-UI |
 | `POSTBOTE_MIGRATIONS_DIR` | `migrations` | Pfad zu den SQL-Migrationen |
 | `POSTBOTE_LOG_LEVEL` | `info` | Fastify-Loglevel |
 | `POSTBOTE_DEMO` | – | `1` = In-Memory-Demo |
@@ -225,6 +231,7 @@ Release-Tags `v*.*.*` publizieren `ghcr.io/devolta-ug-haftungsbeschraenkt/postbo
 - [`docs/SMTP.md`](docs/SMTP.md) — SMTP-Ingress, AUTH, STARTTLS, `X-PM-*` Header
 - [`docs/COMPOSE.md`](docs/COMPOSE.md) — Services, Healthchecks, TLS, Backup, Upgrade
 - [`docs/MIGRATION.md`](docs/MIGRATION.md) — Postmark → postbote, Cut-Over-Checkliste
+- [`docs/OIDC.md`](docs/OIDC.md) — **Auth via OIDC / Logto** (Entscheidung, Architektur, Setup)
 - [`deploy/app01/README.md`](deploy/app01/README.md) — **M7-Runbook**: Parallel-Deploy, Import, Cut-Over, Rollback, Smoke-Tests
 
 ---

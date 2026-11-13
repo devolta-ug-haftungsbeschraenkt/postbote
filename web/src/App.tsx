@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { DemoProvider } from './state/demo'
 import { Layout } from './components/Layout'
+import Callback from './pages/Callback'
 import Overview from './pages/Overview'
 import Messages from './pages/Messages'
 import Bounces from './pages/Bounces'
@@ -16,6 +17,8 @@ export default function App() {
     <BrowserRouter>
       <DemoProvider>
         <Routes>
+          {/* Callback liegt außerhalb des Layouts/Login-Gates. */}
+          <Route path="/callback" element={<Callback />} />
           <Route element={<Layout />}>
             <Route path="/" element={<Overview />} />
             <Route path="/messages" element={<Messages />} />

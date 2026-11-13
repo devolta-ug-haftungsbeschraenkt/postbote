@@ -108,6 +108,16 @@ openssl rand -hex 32
 `npm run setup -- set-relay ...` und `node dist/cli/import.js relay ...`
 verschlüsseln beim Schreiben automatisch.
 
+## Auth via OIDC / Logto
+
+Die Auth-Anforderung und das komplette Setup (Logto-Resource, SPA-App, PKCE,
+Env-Variablen, Migrationspfad) stehen in [`docs/OIDC.md`](../docs/OIDC.md).
+Kurzfassung: `POSTBOTE_AUTH_MODE=both` erlaubt OIDC-Bearer **und** statische
+Tokens; `oidc` erzwingt den Login; `token` ist der Notfall-Fallback. Die
+OIDC-Variablen müssen in allen Backend-Rollen identisch sein (gemeinsamer
+`backend-env`-Anchor). Für die UI werden `POSTBOTE_UI_OIDC_*` beim Containerstart
+in `/config.js` injiziert — ohne sie bleibt die UI im bisherigen Demo-Modus.
+
 ## Admin-UI Runtime-Config
 
 Die UI wird als statisches Bundle ausgeliefert; API-URL und Token werden **beim

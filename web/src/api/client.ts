@@ -27,13 +27,19 @@ import type {
   WebhookListResponse,
 } from './types'
 
+import { getAccessToken, isOidcEnabled, type OidcConfig } from '../auth/oidc'
+
 /**
  * Container deployments inject config at runtime via /config.js
  * (window.__POSTBOTE_CONFIG__); dev builds fall back to VITE_* env vars.
  */
 declare global {
   interface Window {
-    __POSTBOTE_CONFIG__?: { apiBase?: string; token?: string }
+    __POSTBOTE_CONFIG__?: {
+      apiBase?: string
+      token?: string
+      oidc?: OidcConfig
+    }
   }
 }
 
@@ -61,13 +67,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
+    // Bei aktivem OIDC den Menschen per Bearer-Token authentifizieren;
+    // ohne gültigen Token (oder ganz ohne OIDC) bleibt der statische
+    // X-Postmark-Server-Token als Fallback erhalten.
+    const oidcToken = isOidcEnabled() ? getAccessToken() : null
     const response = await fetch(`${API_BASE}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {
         Accept: 'application/json',
         ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(envToken ? { 'X-Postmark-Server-Token': envToken } : {}),
+        ...(oidcToken
+          ? { Authorization: `Bearer ${oidcToken}` }
+          : envToken
+            ? { 'X-Postmark-Server-Token': envToken }
+            : {}),
         ...init?.headers,
       },
     })

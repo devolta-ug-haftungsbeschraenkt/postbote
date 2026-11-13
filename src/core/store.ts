@@ -215,6 +215,7 @@ export interface MessageStore {
   ): Promise<WebhookRecord>
   deleteWebhook(serverId: string, id: string): Promise<boolean>
   getServer(serverId: string): Promise<ServerRecord | null>
+  findServerBySlug(slug: string): Promise<ServerRecord | null>
   /**
    * Create an SMTP credential (Postmark SMTP-token model): accessKey is the
    * SMTP username, secretKey is returned once in plaintext and stored hashed.

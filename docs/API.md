@@ -1,13 +1,18 @@
 # postbote HTTP-API
 
 Postmark-kompatible REST-API. Basis-URL im Default `http://localhost:3000`.
-Alle Endpunkte (ausser `/health`) erwarten den Header
-`X-Postmark-Server-Token: <token>`.
+Alle Endpunkte (ausser `/health` und `/track/*`) erwarten Auth — entweder
+`X-Postmark-Server-Token: <token>` (Maschinen-Clients) oder
+`Authorization: Bearer <JWT>` von Logto (siehe [`docs/OIDC.md`](OIDC.md)).
 
 ## Authentifizierung & Sandbox
 
-- Tokens gehören zu einem *Server*; der Token wird nur als SHA-256-Hash
-  gespeichert und bestimmt den `serverId`-Scope aller Queries.
+- **OIDC/Logto**: Access-Tokens werden gegen die JWKS des Issuers geprüft
+  (Signatur, `iss`, `aud`, `exp`, `nbf`, optionaler Pflicht-Scope). Der
+  Server-Scope kommt aus `POSTBOTE_OIDC_SERVER_SLUG`. Umschaltung über
+  `POSTBOTE_AUTH_MODE`: `both` (Default) · `oidc` · `token`.
+- **Statische Tokens**: Tokens gehören zu einem *Server*; der Token wird nur als
+  SHA-256-Hash gespeichert und bestimmt den `serverId`-Scope aller Queries.
 - **Sandbox**: Tokenwert `POSTMARK_API_TEST` führt die vollständige Validierung
   aus, speichert aber nichts und versendet nichts. Antwort ist eine normale
   Erfolgs-Antwort mit `ErrorCode: 0`.

@@ -657,3 +657,51 @@
     height: 180px;
   }
 }
+
+/* ---- OIDC: Anmeldung in der Top-Bar & Callback-Seite ---- */
+
+.auth-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.auth-user,
+.auth-hint {
+  color: var(--color-body-muted);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Die Pill-Grammatik (Radius, scale(0.95)-Press, Reduced-Motion) kommt von .btn. */
+.btn-auth {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  padding: 6px 16px;
+}
+
+.callback-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+}
+
+.callback-card {
+  width: 100%;
+  max-width: 480px;
+  text-align: center;
+}
+
+.callback-card .type-body {
+  margin-top: var(--space-sm);
+}
+
+@media (max-width: 640px) {
+  .auth-hint {
+    display: none;
+  }
+}

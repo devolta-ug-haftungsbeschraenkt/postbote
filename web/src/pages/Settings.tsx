@@ -4,6 +4,7 @@ import type { RelayConfig, ServerInfo, TlsMode } from '../api/types'
 import * as fixtures from '../data/fixtures'
 import { useApi } from '../hooks/useApi'
 import { useDemoMode } from '../state/demo'
+import { getUserLabel, isOidcEnabled } from '../auth/oidc'
 
 const TLS_MODES: Array<{ value: TlsMode; label: string }> = [
   { value: 'none', label: 'Kein TLS' },
@@ -15,6 +16,7 @@ type StatusState = { kind: 'ok' | 'error' | 'info'; text: string } | null
 
 export default function Settings() {
   const demo = useDemoMode()
+  const oidcEnabled = isOidcEnabled()
   const server = useApi<ServerInfo>(api.server, fixtures.server)
   const [form, setForm] = useState<RelayConfig>(fixtures.relayConfig)
   const [status, setStatus] = useState<StatusState>(null)
@@ -62,6 +64,16 @@ export default function Settings() {
           </p>
         </div>
       </header>
+
+      {oidcEnabled ? (
+        <section className="card">
+          <h2 className="card-title type-body-strong">Anmeldung</h2>
+          <p className="type-caption text-muted">
+            Single Sign-On (OIDC) ist aktiv. Angemeldet als{' '}
+            {getUserLabel() ?? 'unbekannter Benutzer'}.
+          </p>
+        </section>
+      ) : null}
 
       <section className="card">
         <h2 className="card-title type-body-strong">Server</h2>

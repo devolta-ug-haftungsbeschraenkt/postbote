@@ -290,6 +290,15 @@ export class PostgresMessageStore implements MessageStore {
     return rows[0] ?? null
   }
 
+  async findServerBySlug(slug: string): Promise<ServerRecord | null> {
+    const rows = await this.db
+      .select({ id: serversTable.id, name: serversTable.name, slug: serversTable.slug })
+      .from(serversTable)
+      .where(eq(serversTable.slug, slug))
+      .limit(1)
+    return rows[0] ?? null
+  }
+
   async listBounces(options: {
     serverId: string
     type?: string

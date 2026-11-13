@@ -18,6 +18,7 @@ describe.skipIf(!url)('Postgres-Integration', () => {
   let db: ReturnType<typeof createDb>['db']
   let store: PostgresMessageStore
   let serverId: string
+  let serverSlug: string
   let tokenValue: string
 
   beforeAll(async () => {
@@ -26,10 +27,8 @@ describe.skipIf(!url)('Postgres-Integration', () => {
     db = connection.db
     await migrate(db, { migrationsFolder: 'migrations' })
     store = new PostgresMessageStore(db)
-    const server = await store.createServer(
-      'Integration',
-      `pg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    )
+    serverSlug = `pg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const server = await store.createServer('Integration', serverSlug)
     serverId = server.id
     tokenValue = `pg-integration-token-${Date.now()}`
     await store.addToken(server.id, tokenValue, 'integration')
@@ -43,6 +42,8 @@ describe.skipIf(!url)('Postgres-Integration', () => {
     const token = await store.findServerByToken(tokenValue)
     expect(token?.serverId).toBe(serverId)
     expect(await store.getServer(serverId)).toMatchObject({ name: 'Integration' })
+    expect((await store.findServerBySlug(serverSlug))?.id).toBe(serverId)
+    expect(await store.findServerBySlug('does-not-exist')).toBeNull()
   })
 
   it('Message inkl. Cc/Bcc/Tracking/Attachments roundtrip', async () => {

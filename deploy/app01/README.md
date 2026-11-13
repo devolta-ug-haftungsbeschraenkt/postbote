@@ -139,6 +139,9 @@ Checkliste (vor Cut-Over **alle** grün):
 - [ ] `/deliverystats`: `Queued: 0`, `Failed: 0`
 - [ ] Bounce-Webhook gegen absichtlich ungültige Adresse
 - [ ] Sandbox-Token, Batch mit ungültigem Item (HTTP 200 + pro-Item-ErrorCode)
+- [ ] **OIDC/Logto**: Admin-UI-Login (PKCE) → `Authorization: Bearer` gegen
+      `GET /server`; Ablauf/Key-Rotation und `POSTBOTE_AUTH_MODE` prüfen
+      (siehe [`docs/OIDC.md`](../../docs/OIDC.md))
 - [ ] Templates rendern (`POST /templates/validate`) gegen Golden-Tests
 
 ## Phase 4 — Cut-Over

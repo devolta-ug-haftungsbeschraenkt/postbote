@@ -6,6 +6,19 @@ Alle nennenswerten Änderungen an postbote. Format orientiert sich an
 
 ## [Unreleased]
 
+### Auth via OIDC / Logto (wichtiger Zusatz)
+
+- **Anforderung notiert** in `docs/OIDC.md`: Authentifizierung über OIDC mit
+  Logto, dualer Betrieb mit statischen Postmark-Tokens über
+  `POSTBOTE_AUTH_MODE` (`both` · `oidc` · `token`).
+- Backend: JWKS-basierte JWT-Verifikation (RS256/RS384/RS512/ES256, Discovery,
+  Key-Rotation, `iss`/`aud`/`exp`/`nbf`/`iat`, Pflicht-Scope) ohne neue
+  Dependencies; OIDC-Principals werden auf `POSTBOTE_OIDC_SERVER_SLUG`
+  abgebildet.
+- Admin-UI: optionaler Authorization-Code+PKCE-Login gegen Logto, Bearer-Token
+  statt statischem Header; ohne OIDC-Konfiguration unverändertes Demo-Verhalten.
+- 15 Integrationstests gegen einen lokalen JWKS-Server.
+
 ### Härtung
 
 - **Rate-Limit** pro Server-Token (`POSTBOTE_RATE_LIMIT_PER_MIN`, Default 600)

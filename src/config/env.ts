@@ -19,6 +19,13 @@ export interface PostboteConfig {
   rateLimitPerMinute: number
   /** AES-256-GCM key for secrets at rest; empty = plaintext legacy mode. */
   secretKey: string
+  /** Auth mode: both (OIDC + static tokens), oidc (OIDC only), token (static only). */
+  authMode: 'both' | 'oidc' | 'token'
+  oidcIssuer: string
+  oidcAudience: string
+  oidcRequiredScope: string
+  oidcServerSlug: string
+  oidcJwksTtlMs: number
 }
 
 function str(value: string | undefined, fallback: string): string {
@@ -55,5 +62,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PostboteConfig
     ),
     rateLimitPerMinute: Number.parseInt(str(env.POSTBOTE_RATE_LIMIT_PER_MIN, '600'), 10),
     secretKey: str(env.POSTBOTE_SECRET_KEY, ''),
+    authMode: (['both', 'oidc', 'token'].includes(str(env.POSTBOTE_AUTH_MODE, 'both'))
+      ? str(env.POSTBOTE_AUTH_MODE, 'both')
+      : 'both') as PostboteConfig['authMode'],
+    oidcIssuer: str(env.POSTBOTE_OIDC_ISSUER, '').replace(/\/+$/, ''),
+    oidcAudience: str(env.POSTBOTE_OIDC_AUDIENCE, ''),
+    oidcRequiredScope: str(env.POSTBOTE_OIDC_REQUIRED_SCOPE, ''),
+    oidcServerSlug: str(env.POSTBOTE_OIDC_SERVER_SLUG, 'default'),
+    oidcJwksTtlMs: Number.parseInt(str(env.POSTBOTE_OIDC_JWKS_TTL_MS, '3600000'), 10),
   }
 }
