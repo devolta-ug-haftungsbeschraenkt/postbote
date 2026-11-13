@@ -22,6 +22,13 @@
       "when": 1794600079427,
       "tag": "0002_living_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794602619839,
+      "tag": "0003_busy_sage",
+      "breakpoints": true
     }
   ]
 }

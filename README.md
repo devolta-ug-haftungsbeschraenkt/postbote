@@ -29,6 +29,7 @@ keine externen Abhängigkeiten ausser deinem eigenen Mailserver.
 | Tracking & Stats | `TrackOpens`/`TrackLinks`, Open-Pixel, Click-Redirect, `Open`/`Click`-Webhooks, `/stats/outbound` |
 | Härtung | `allowedFrom`/1480, Rate-Limit/429, 10-MB-Limit, AES-256-GCM für Relay-Passwörter, Postgres-Integrationstests |
 | **Auth via OIDC / Logto** | `Authorization: Bearer <JWT>` (JWKS, RS256/ES256, Scopes) für Menschen/Admin-UI; statische Tokens bleiben für Postmark-Clients (`POSTBOTE_AUTH_MODE`) |
+| **Logto-Connector** | `POST /logto` mit `{to,type,payload}`, pro-Client `logtoConfig` aus `tokens.env` (app01-Parität) |
 | Worker | Postgres-Queue (`FOR UPDATE SKIP LOCKED`), Retry mit Backoff, Bounce-Klassifikation, Delivery-/Bounce-Webhooks |
 | Auth | `X-Postmark-Server-Token`, Tokens nur als SHA-256-Hash, Sandbox-Token `POSTMARK_API_TEST` |
 | Fehler | Postmark-ErrorCodes (10, 300, 402, 410, 1101, 1364, …) + `X-PM-ApiErrorCode` |
@@ -172,6 +173,7 @@ Cut-Over-Checkliste: [`docs/MIGRATION.md`](docs/MIGRATION.md).
 | `POSTBOTE_OIDC_REQUIRED_SCOPE` | – | Pflicht-Scope, z. B. `postbote:admin` |
 | `POSTBOTE_OIDC_SERVER_SLUG` | `default` | Server-Scope für OIDC-Principals |
 | `POSTBOTE_UI_OIDC_ISSUER` / `..._CLIENT_ID` | – | Logto-PKCE-Login der Admin-UI |
+| `POSTBOTE_DEFAULT_HEADERS` | – | JSON-Array zusätzlicher Mail-Header, z. B. `[{"name":"X-Devolta-Signature","value":"skip"}]` |
 | `POSTBOTE_MIGRATIONS_DIR` | `migrations` | Pfad zu den SQL-Migrationen |
 | `POSTBOTE_LOG_LEVEL` | `info` | Fastify-Loglevel |
 | `POSTBOTE_DEMO` | – | `1` = In-Memory-Demo |

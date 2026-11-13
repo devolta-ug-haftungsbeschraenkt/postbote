@@ -35,6 +35,8 @@ export const serverTokens = pgTable(
     tokenHash: text('token_hash').notNull().unique(),
     name: text('name').notNull(),
     /** Optional sender allowlist, e.g. ["*@devolta.de"]. null = any sender. */
+    /** Pro-Client-Konfiguration für den Logto-HTTP-Email-Connector (/logto). */
+    logtoConfig: jsonb('logto_config').$type<{ from: string; templates: Record<string, string> }>(),
     allowedFrom: jsonb('allowed_from').$type<string[]>(),
     sandbox: boolean('sandbox').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

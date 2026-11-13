@@ -21,6 +21,7 @@ import { decryptAtRest } from './secret.js'
 import type {
   BounceRecord,
   LayoutRecord,
+  LogtoConfig,
   MessageInput,
   MessageRecord,
   MessageStatus,
@@ -57,6 +58,7 @@ export class PostgresMessageStore implements MessageStore {
       tokenHash: row.tokenHash,
       name: row.name,
       ...(row.allowedFrom !== null && { allowedFrom: row.allowedFrom }),
+      ...(row.logtoConfig !== null && { logtoConfig: row.logtoConfig }),
       sandbox: row.sandbox,
     }
   }
@@ -69,8 +71,31 @@ export class PostgresMessageStore implements MessageStore {
     return rows[0] as ServerRecord
   }
 
-  async addToken(serverId: string, token: string, name: string): Promise<void> {
-    await this.db.insert(serverTokens).values({ serverId, tokenHash: hashToken(token), name })
+  async addToken(
+    serverId: string,
+    token: string,
+    name: string,
+    extras?: { allowedFrom?: string[]; logtoConfig?: LogtoConfig },
+  ): Promise<void> {
+    const values = {
+      serverId,
+      tokenHash: hashToken(token),
+      name,
+      ...(extras?.allowedFrom !== undefined && { allowedFrom: extras.allowedFrom }),
+      ...(extras?.logtoConfig !== undefined && { logtoConfig: extras.logtoConfig }),
+    }
+    // Idempotent: Re-Import aktualisiert Name/Allowlist/Logto-Config.
+    await this.db
+      .insert(serverTokens)
+      .values(values)
+      .onConflictDoUpdate({
+        target: serverTokens.tokenHash,
+        set: {
+          name: values.name,
+          ...(values.allowedFrom !== undefined && { allowedFrom: values.allowedFrom }),
+          ...(values.logtoConfig !== undefined && { logtoConfig: values.logtoConfig }),
+        },
+      })
   }
 
   async insertMessage(

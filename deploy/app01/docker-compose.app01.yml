@@ -62,6 +62,10 @@ services:
       POSTBOTE_RATE_LIMIT_PER_MIN: ${POSTBOTE_RATE_LIMIT_PER_MIN:-600}
       POSTBOTE_SECRET_KEY: ${POSTBOTE_SECRET_KEY:-}
       POSTBOTE_AUTH_MODE: ${POSTBOTE_AUTH_MODE:-both}
+      POSTBOTE_DEFAULT_HEADERS: "${POSTBOTE_DEFAULT_HEADERS:-}"
+      POSTBOTE_RELAY_HOST: ${POSTBOTE_RELAY_HOST:-}
+      POSTBOTE_RELAY_PORT: ${POSTBOTE_RELAY_PORT:-}
+      POSTBOTE_RELAY_TLS_MODE: ${POSTBOTE_RELAY_TLS_MODE:-}
       POSTBOTE_OIDC_ISSUER: ${POSTBOTE_OIDC_ISSUER:-}
       POSTBOTE_OIDC_AUDIENCE: ${POSTBOTE_OIDC_AUDIENCE:-}
       POSTBOTE_OIDC_REQUIRED_SCOPE: ${POSTBOTE_OIDC_REQUIRED_SCOPE:-}
@@ -79,7 +83,7 @@ services:
       <<: *backend-env
       POSTBOTE_ROLE: api
     ports:
-      - '${POSTBOTE_V2_PORT:-3001}:3000'
+      - '${POSTBOTE_V2_PORT:-3002}:3000'
     volumes:
       # Import-Quellen (tokens.env, smtp.env, templates/) — read-only.
       - '${POSTBOTE_IMPORT_DIR:-/opt/postbote}:/opt/postbote:ro'
@@ -101,6 +105,9 @@ services:
     environment:
       <<: *backend-env
       POSTBOTE_ROLE: worker
+    # Mailcow-Relay ist per extra_hosts auf die IPv4-Adresse gepinnt (SPF/PTR).
+    extra_hosts:
+      - '${POSTBOTE_RELAY_HOSTNAME:-mail.devolta.de}:${POSTBOTE_RELAY_IP:-178.63.12.152}'
     networks: [internal]
     depends_on:
       postgres:

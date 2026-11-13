@@ -117,3 +117,53 @@ describe('app01 Import: Template-Manifest & Discovery', () => {
     })
   })
 })
+
+describe('app01-Realformate (POSTBOTE_TOKENS + Verzeichnis-Templates)', () => {
+  it('tokens.env als POSTBOTE_TOKENS-JSON inkl. allowedFrom/logto', () => {
+    const env = parseEnvFile(
+      `POSTBOTE_TOKENS=${JSON.stringify({
+        pb_aar_abc: { name: 'aar', allowedFrom: ['*@aar.de'] },
+        pb_logto_xyz: {
+          name: 'logto-devolta',
+          allowedFrom: ['office@devolta.de'],
+          logto: { from: 'devolta <office@devolta.de>', templates: { SignIn: 'logto-sign-in' } },
+        },
+      })}`,
+    )
+    const plan = tokenPlan(env)
+    expect(plan).toHaveLength(2)
+    const logto = plan.find((e) => e.name === 'logto-devolta')
+    expect(logto?.allowedFrom).toEqual(['office@devolta.de'])
+    expect(logto?.logtoConfig).toEqual({
+      from: 'devolta <office@devolta.de>',
+      templates: { SignIn: 'logto-sign-in' },
+    })
+  })
+
+  it('Discovery: <alias>/body.html + subject.txt + layout.txt und _layouts/basic', () => {
+    const manifest = discoverTemplates([
+      '_layouts/basic/body.html',
+      'logto-sign-in/body.html',
+      'logto-sign-in/body.txt',
+      'logto-sign-in/subject.txt',
+      'logto-sign-in/layout.txt',
+      'lead-new-de/body.html',
+    ])
+    expect(manifest.layouts?.map((l) => l.alias)).toEqual(['basic'])
+    expect(manifest.layouts?.[0]?.htmlFile).toBe('_layouts/basic/body.html')
+    expect(manifest.templates?.map((t) => t.alias).sort()).toEqual(['lead-new-de', 'logto-sign-in'])
+    const signIn = manifest.templates?.find((t) => t.alias === 'logto-sign-in')
+    expect(signIn).toMatchObject({
+      htmlFile: 'logto-sign-in/body.html',
+      textFile: 'logto-sign-in/body.txt',
+      subjectFile: 'logto-sign-in/subject.txt',
+      layoutFile: 'logto-sign-in/layout.txt',
+    })
+  })
+
+  it('relayPlan nutzt Fallback-Host/Port, wenn smtp.env sie nicht enthält', () => {
+    expect(
+      relayPlan({ SMTP_USER: 'u', SMTP_PASS: 'p' }, { host: 'mail.devolta.de', port: '587' }),
+    ).toMatchObject({ host: 'mail.devolta.de', port: 587 })
+  })
+})

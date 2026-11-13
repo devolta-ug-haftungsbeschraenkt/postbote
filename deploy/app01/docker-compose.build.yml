@@ -1,0 +1,23 @@
+# Override für app01: Images lokal aus dem geklonten Repo bauen, statt aus
+# GHCR zu pullen (die Packages der Org sind privat → kein Pull ohne Login).
+#
+#   docker compose -f deploy/app01/docker-compose.app01.yml \
+#     -f deploy/app01/docker-compose.build.yml --env-file deploy/app01/app01.env \
+#     build
+#
+# Build-Kontext ist der Repo-Root (zwei Ebenen über deploy/app01/).
+services:
+  migrate:
+    build: &backend-build
+      context: ../..
+      dockerfile: docker/Dockerfile
+  api:
+    build: *backend-build
+  worker:
+    build: *backend-build
+  smtp:
+    build: *backend-build
+  ui:
+    build:
+      context: ../..
+      dockerfile: web/Dockerfile

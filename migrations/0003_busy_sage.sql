@@ -1,0 +1,1 @@
+ALTER TABLE "server_tokens" ADD COLUMN "logto_config" jsonb;

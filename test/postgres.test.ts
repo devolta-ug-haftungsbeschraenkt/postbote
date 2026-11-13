@@ -32,6 +32,10 @@ describe.skipIf(!url)('Postgres-Integration', () => {
     serverId = server.id
     tokenValue = `pg-integration-token-${Date.now()}`
     await store.addToken(server.id, tokenValue, 'integration')
+    await store.addToken(server.id, 'pg-logto-token', 'logto-client', {
+      allowedFrom: ['*@devolta.de'],
+      logtoConfig: { from: 'devolta <office@devolta.de>', templates: { SignIn: 'logto-sign-in' } },
+    })
   })
 
   afterAll(async () => {
@@ -41,6 +45,10 @@ describe.skipIf(!url)('Postgres-Integration', () => {
   it('Token-Auth + Server', async () => {
     const token = await store.findServerByToken(tokenValue)
     expect(token?.serverId).toBe(serverId)
+    expect((await store.findServerByToken('pg-logto-token'))?.logtoConfig).toEqual({
+      from: 'devolta <office@devolta.de>',
+      templates: { SignIn: 'logto-sign-in' },
+    })
     expect(await store.getServer(serverId)).toMatchObject({ name: 'Integration' })
     expect((await store.findServerBySlug(serverSlug))?.id).toBe(serverId)
     expect(await store.findServerBySlug('does-not-exist')).toBeNull()

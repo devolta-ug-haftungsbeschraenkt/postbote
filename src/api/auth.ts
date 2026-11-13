@@ -23,6 +23,21 @@ export interface AuthResult {
  * `POSTBOTE_AUTH_MODE`: both (Default) | oidc | token.
  * Fehler → HTTP 401 mit ErrorCode 10, ohne Details zum Token.
  */
+export async function authenticateStaticToken(
+  request: FastifyRequest,
+  store: MessageStore,
+): Promise<TokenRecord | null> {
+  const headerValue = request.headers[TOKEN_HEADER]
+  const authHeader = request.headers.authorization
+  const bearer =
+    typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')
+      ? authHeader.slice(7).trim()
+      : ''
+  const raw = typeof headerValue === 'string' && headerValue.length > 0 ? headerValue : bearer
+  if (!raw) return null
+  return store.findServerByToken(raw)
+}
+
 export async function authenticate(
   request: FastifyRequest,
   reply: FastifyReply,

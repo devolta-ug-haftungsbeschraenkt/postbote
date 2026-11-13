@@ -29,19 +29,68 @@ export function parseEnvFile(content: string): Record<string, string> {
 export interface TokenPlanEntry {
   name: string
   token: string
+  allowedFrom?: string[]
+  logtoConfig?: { from: string; templates: Record<string, string> }
 }
 
-/** Every non-empty entry in tokens.env is a token; `only` restricts by key name. */
+/**
+ * Zwei Formate:
+ *  - `KEY=TOKEN` pro Zeile (einfach)
+ *  - `POSTBOTE_TOKENS=<JSON>` mit Client-Objekten
+ *    `{name, allowedFrom, logto:{from,templates}}` — Realformat auf app01.
+ */
 export function tokenPlan(
   env: Record<string, string>,
   options: { only?: string } = {},
 ): TokenPlanEntry[] {
   const only = options.only?.toLowerCase()
+  const filter = (key: string, value: string): boolean =>
+    value.length > 0 && (only === undefined || key.toLowerCase().includes(only))
+
+  const jsonRaw = env.POSTBOTE_TOKENS
+  if (jsonRaw !== undefined) {
+    try {
+      const parsed: unknown = JSON.parse(jsonRaw)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return Object.entries(parsed as Record<string, unknown>)
+          .filter(
+            ([token, value]) => typeof value === 'object' && value !== null && filter(token, token),
+          )
+          .map(([token, raw]) => {
+            const client = raw as Record<string, unknown>
+            const logto = client.logto as Record<string, unknown> | undefined
+            return {
+              name: typeof client.name === 'string' ? client.name : token.slice(0, 24),
+              token,
+              ...(Array.isArray(client.allowedFrom) && {
+                allowedFrom: (client.allowedFrom as unknown[]).filter(
+                  (v): v is string => typeof v === 'string',
+                ),
+              }),
+              ...(logto !== undefined &&
+                typeof logto.from === 'string' &&
+                typeof logto.templates === 'object' &&
+                logto.templates !== null && {
+                  logtoConfig: {
+                    from: logto.from,
+                    templates: Object.fromEntries(
+                      Object.entries(logto.templates as Record<string, unknown>).filter(
+                        (entry): entry is [string, string] => typeof entry[1] === 'string',
+                      ),
+                    ),
+                  },
+                }),
+            }
+          })
+          .sort((a, b) => a.name.localeCompare(b.name))
+      }
+    } catch {
+      // Kein gültiges JSON → einfaches Format.
+    }
+  }
+
   return Object.entries(env)
-    .filter(
-      ([key, value]) =>
-        value.length > 0 && (only === undefined || key.toLowerCase().includes(only)),
-    )
+    .filter(([key, value]) => key !== 'POSTBOTE_TOKENS' && filter(key, value))
     .map(([name, token]) => ({ name, token }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -55,7 +104,10 @@ export interface RelayPlan {
 }
 
 /** Map smtp.env (several common key spellings) to relay_configs values. */
-export function relayPlan(env: Record<string, string>): RelayPlan {
+export function relayPlan(
+  env: Record<string, string>,
+  fallback: { host?: string; port?: string; tlsMode?: string } = {},
+): RelayPlan {
   const pick = (...keys: string[]): string | undefined => {
     for (const key of keys) {
       const value = env[key] ?? env[key.toUpperCase()] ?? env[key.toLowerCase()]
@@ -63,11 +115,11 @@ export function relayPlan(env: Record<string, string>): RelayPlan {
     }
     return undefined
   }
-  const host = pick('SMTP_HOST', 'HOST', 'RELAY_HOST')
-  const portRaw = pick('SMTP_PORT', 'PORT', 'RELAY_PORT') ?? '587'
+  const host = pick('SMTP_HOST', 'HOST', 'RELAY_HOST') ?? fallback.host
+  const portRaw = pick('SMTP_PORT', 'PORT', 'RELAY_PORT') ?? fallback.port ?? '587'
   const username = pick('SMTP_USER', 'SMTP_USERNAME', 'USER', 'USERNAME')
   const password = pick('SMTP_PASS', 'SMTP_PASSWORD', 'PASS', 'PASSWORD')
-  const tlsRaw = (pick('TLS_MODE', 'SMTP_TLS_MODE') ?? 'starttls').toLowerCase()
+  const tlsRaw = (pick('TLS_MODE', 'SMTP_TLS_MODE') ?? fallback.tlsMode ?? 'starttls').toLowerCase()
 
   const port = Number.parseInt(portRaw, 10)
   if (!host) throw new Error('smtp.env: missing host (SMTP_HOST/HOST/RELAY_HOST)')
@@ -101,6 +153,8 @@ export interface TemplateSpec {
   htmlFile?: string
   textFile?: string
   subjectFile?: string
+  /** Datei, deren Inhalt den Layout-Alias enthält (app01: layout.txt). */
+  layoutFile?: string
   layoutAlias?: string
 }
 
@@ -162,6 +216,7 @@ export function parseManifest(content: string): TemplateManifest {
         ...optional(raw, 'htmlFile'),
         ...optional(raw, 'textFile'),
         ...optional(raw, 'subjectFile'),
+        ...optional(raw, 'layoutFile'),
         ...optional(raw, 'layoutAlias'),
       }),
     ),
@@ -169,22 +224,56 @@ export function parseManifest(content: string): TemplateManifest {
 }
 
 /**
- * Fallback when no manifest.json exists: convention-based discovery from a
- * list of relative file paths (as returned by readdir).
- *   layouts/<alias>.html[/.txt]  → layouts
- *   <alias>.html / <alias>.txt  → templates
- *   <alias>.subject.txt         → subject
+ * Konventionsbasierte Discovery, wenn kein manifest.json existiert.
+ * Unterstützt beide Layouts:
+ *  - flach: `layouts/<alias>.html|txt`, `<alias>.html|.txt|.subject.txt`
+ *  - app01: `_layouts/<alias>/body.html`,
+ *           `<alias>/body.html|body.txt|subject.txt|layout.txt`
  */
 export function discoverTemplates(paths: string[]): TemplateManifest {
   const layouts = new Map<string, LayoutSpec>()
   const templates = new Map<string, TemplateSpec>()
+  const ensureLayout = (alias: string): LayoutSpec => layouts.get(alias) ?? { alias, name: alias }
+  const ensureTemplate = (alias: string): TemplateSpec =>
+    templates.get(alias) ?? { alias, name: alias, subject: '' }
 
   for (const path of paths) {
     const normalised = path.replaceAll('\\', '/')
+    if (normalised.startsWith('/') || normalised.includes('..')) continue
+
+    // app01-Layout: _layouts/<alias>/body.html
+    const app01Layout = /^_layouts\/([^/]+)\/body\.(html|txt)$/.exec(normalised)
+    if (app01Layout?.[1]) {
+      const entry = ensureLayout(app01Layout[1])
+      if (app01Layout[2] === 'html') entry.htmlFile = normalised
+      else entry.textFile = normalised
+      layouts.set(entry.alias, entry)
+      continue
+    }
+
+    // app01-Template: <alias>/body.html|body.txt|subject.txt|layout.txt
+    const app01Template = /^([^/]+)\/(body|subject|layout)\.(html|txt)$/.exec(normalised)
+    if (app01Template?.[1] && app01Template[2]) {
+      const alias = app01Template[1]
+      const kind = app01Template[2]
+      const entry = ensureTemplate(alias)
+      if (kind === 'body') {
+        if (app01Template[3] === 'html') entry.htmlFile = normalised
+        else entry.textFile = normalised
+      } else if (kind === 'subject') {
+        entry.subjectFile = normalised
+      } else {
+        entry.layoutFile = normalised
+      }
+      templates.set(alias, entry)
+      continue
+    }
+
+    // flache Legacy-Konvention
     const isLayout = normalised.startsWith('layouts/')
     if (isLayout && (normalised.endsWith('.html') || normalised.endsWith('.txt'))) {
       const base = normalised.slice('layouts/'.length).replace(/\.(html|txt)$/, '')
-      const entry = layouts.get(base) ?? { alias: base, name: base }
+      const entry = ensureLayout(base)
       if (normalised.endsWith('.html')) entry.htmlFile = normalised
       else entry.textFile = normalised
       layouts.set(base, entry)
@@ -193,19 +282,20 @@ export function discoverTemplates(paths: string[]): TemplateManifest {
     if (!isLayout && /^[^/]+\.(html|txt|subject\.txt)$/.test(normalised)) {
       if (normalised.endsWith('.subject.txt')) {
         const alias = normalised.replace('.subject.txt', '')
-        const entry = templates.get(alias) ?? { alias, name: alias, subject: '' }
+        const entry = ensureTemplate(alias)
         entry.subjectFile = normalised
         templates.set(alias, entry)
         continue
       }
       const alias = normalised.replace(/\.(html|txt)$/, '')
-      const entry = templates.get(alias) ?? { alias, name: alias, subject: '' }
+      const entry = ensureTemplate(alias)
       if (normalised.endsWith('.html')) entry.htmlFile = normalised
       else entry.textFile = normalised
       templates.set(alias, entry)
     }
   }
 
+  templates.delete('_layouts')
   return {
     layouts: [...layouts.values()].sort((a, b) => a.alias.localeCompare(b.alias)),
     templates: [...templates.values()].sort((a, b) => a.alias.localeCompare(b.alias)),

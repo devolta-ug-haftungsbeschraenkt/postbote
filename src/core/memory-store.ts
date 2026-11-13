@@ -2,6 +2,7 @@ import { hashToken } from './store.js'
 import type {
   BounceRecord,
   LayoutRecord,
+  LogtoConfig,
   MessageInput,
   MessageRecord,
   MessageStatus,
@@ -65,11 +66,18 @@ export class MemoryMessageStore implements MessageStore {
     return server
   }
 
-  async addToken(serverId: string, token: string, name: string): Promise<void> {
+  async addToken(
+    serverId: string,
+    token: string,
+    name: string,
+    extras?: { allowedFrom?: string[]; logtoConfig?: LogtoConfig },
+  ): Promise<void> {
     this.tokens.set(hashToken(token), {
       serverId,
       tokenHash: hashToken(token),
       name,
+      ...(extras?.allowedFrom !== undefined && { allowedFrom: extras.allowedFrom }),
+      ...(extras?.logtoConfig !== undefined && { logtoConfig: extras.logtoConfig }),
       sandbox: false,
     })
   }

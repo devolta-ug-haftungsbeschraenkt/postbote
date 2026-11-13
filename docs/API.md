@@ -213,6 +213,26 @@ Empfänger müssen also idempotent sein.
 
 ---
 
+## Logto-Connector: `POST /logto`
+
+Der Logto-„HTTP email"-Connector sendet `{ to, type, payload }` mit
+`Authorization: Bearer <token>` (oder `X-Postmark-Server-Token`). Der Token
+trägt pro Client eine `logtoConfig` mit `from` und einem Mapping
+`type → TemplateAlias` (Import aus `tokens.env`, siehe `deploy/app01/README.md`).
+postbote rendert das Template mit `payload` als Modell und setzt
+`Tag: logto-<type>`.
+
+| Fehler | Response |
+|---|---|
+| Kein/ungültiger Token | 401 / ErrorCode 10 |
+| Token ohne `logtoConfig` | 403 / ErrorCode 10 |
+| Unbekannter `type` oder fehlendes Template | 422 / ErrorCode 1101 |
+| Renderfehler | 422 / ErrorCode 100010 |
+| Unterdrückter Empfänger / Allowlist | 422 / ErrorCode 406 / 1480 |
+
+`POSTBOTE_DEFAULT_HEADERS` (JSON-Array) ergänzt Header an **jeder** gesendeten
+Mail — auf app01 z. B. `X-Devolta-Signature: skip` für den Mailcow-Milter.
+
 ## Message-Streams (Phase 2)
 
 `outbound` ist der eingebaute Default-Stream und immer gültig. Eigene Streams

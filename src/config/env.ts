@@ -26,6 +26,8 @@ export interface PostboteConfig {
   oidcRequiredScope: string
   oidcServerSlug: string
   oidcJwksTtlMs: number
+  /** Zusätzliche Header für jede gesendete Mail (app01: X-Devolta-Signature). */
+  defaultHeaders: { name: string; value: string }[]
 }
 
 function str(value: string | undefined, fallback: string): string {
@@ -70,5 +72,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PostboteConfig
     oidcRequiredScope: str(env.POSTBOTE_OIDC_REQUIRED_SCOPE, ''),
     oidcServerSlug: str(env.POSTBOTE_OIDC_SERVER_SLUG, 'default'),
     oidcJwksTtlMs: Number.parseInt(str(env.POSTBOTE_OIDC_JWKS_TTL_MS, '3600000'), 10),
+    defaultHeaders: parseDefaultHeaders(env.POSTBOTE_DEFAULT_HEADERS),
+  }
+}
+
+function parseDefaultHeaders(raw: string | undefined): { name: string; value: string }[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(
+        (entry): entry is { name: string; value: string } =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof (entry as Record<string, unknown>).name === 'string' &&
+          typeof (entry as Record<string, unknown>).value === 'string',
+      )
+      .map((entry) => ({ name: entry.name, value: entry.value }))
+  } catch {
+    return []
   }
 }

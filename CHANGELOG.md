@@ -6,6 +6,19 @@ Alle nennenswerten Änderungen an postbote. Format orientiert sich an
 
 ## [Unreleased]
 
+### app01-Deploy: Blocker geschlossen
+
+- `POST /logto` nach Legacy-Vertrag (`{to,type,payload}`, Bearer-Token,
+  pro-Client `from`/Template-Mapping), inkl. 1480/406/1101/100010.
+- `server_tokens.logto_config` + `allowedFrom`-Import aus dem
+  `POSTBOTE_TOKENS`-JSON (Migration `0003`).
+- Template-Discovery für die app01-Konvention (`<alias>/body.html`,
+  `subject.txt`, `layout.txt`, `_layouts/<name>/`).
+- `POSTBOTE_DEFAULT_HEADERS` für `X-Devolta-Signature: skip` (Mailcow-Milter)
+  und Relay-Host/Port-Fallback für `smtp.env`.
+- Deploy-Artefakte: reale `app01.env`, Build-Override (GHCR-Packages sind
+  privat), Port 3002, `extra_hosts` für `mail.devolta.de`.
+
 ### Auth via OIDC / Logto (wichtiger Zusatz)
 
 - **Anforderung notiert** in `docs/OIDC.md`: Authentifizierung über OIDC mit

@@ -65,11 +65,18 @@ export interface ServerRecord {
   slug: string
 }
 
+export interface LogtoConfig {
+  from: string
+  templates: Record<string, string>
+}
+
 export interface TokenRecord {
   serverId: string
   tokenHash: string
   name: string
   allowedFrom?: string[]
+  /** Pro-Client-Konfiguration für POST /logto (app01-Migration). */
+  logtoConfig?: LogtoConfig
   sandbox: boolean
 }
 
@@ -147,7 +154,12 @@ export interface MessageStore {
   /** Resolve a raw server token to its owning server, or null if unknown. */
   findServerByToken(token: string): Promise<TokenRecord | null>
   createServer(name: string, slug: string): Promise<ServerRecord>
-  addToken(serverId: string, token: string, name: string): Promise<void>
+  addToken(
+    serverId: string,
+    token: string,
+    name: string,
+    extras?: { allowedFrom?: string[]; logtoConfig?: LogtoConfig },
+  ): Promise<void>
   insertMessage(input: MessageInput, serverId: string, streamId: string): Promise<MessageRecord>
   getMessage(id: string): Promise<MessageRecord | null>
   updateMessageStatus(id: string, status: MessageStatus, sentAt?: Date): Promise<void>

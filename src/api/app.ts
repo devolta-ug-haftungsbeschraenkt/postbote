@@ -4,6 +4,7 @@ import { MemoryMessageStore } from '../core/memory-store.js'
 import type { MessageStore } from '../core/store.js'
 import { registerBounceRoutes } from './routes/bounces.js'
 import { registerEmailRoutes } from './routes/email.js'
+import { registerLogtoRoutes } from './routes/logto.js'
 import { registerQueryRoutes } from './routes/query.js'
 import { registerStatsRoutes } from './routes/stats.js'
 import { registerStreamRoutes } from './routes/streams.js'
@@ -69,6 +70,7 @@ export async function buildApp(options: PostboteAppOptions = {}) {
   await app.register(cors, { origin: true })
 
   registerEmailRoutes(app)
+  registerLogtoRoutes(app)
   registerQueryRoutes(app)
   registerTemplateRoutes(app)
   registerBounceRoutes(app)

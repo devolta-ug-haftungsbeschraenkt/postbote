@@ -1,15 +1,11 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { loadConfig } from '../config/env.js'
+import { PostgresMessageStore } from '../core/postgres-store.js'
 import { encryptAtRest } from '../core/secret.js'
 import { hashToken } from '../core/store.js'
 import { createDb } from '../db/client.js'
-import {
-  layouts as layoutsTable,
-  relayConfigs,
-  serverTokens,
-  templates as templatesTable,
-} from '../db/schema.js'
+import { layouts as layoutsTable, relayConfigs, templates as templatesTable } from '../db/schema.js'
 import {
   type LayoutSpec,
   type TemplateManifest,
@@ -54,16 +50,16 @@ function readOptional(dir: string, file: string | undefined): string | undefined
 
 function listTemplateFiles(dir: string): string[] {
   const out: string[] = []
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name)
-    if (entry.isDirectory() && entry.name === 'layouts') {
-      for (const sub of readdirSync(full, { withFileTypes: true })) {
-        if (sub.isFile()) out.push(relative(dir, join(full, sub.name)))
-      }
-    } else if (entry.isFile()) {
-      out.push(relative(dir, full))
+  const walk = (current: string, depth: number): void => {
+    if (depth > 3) return
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
+      const full = join(current, entry.name)
+      if (entry.isDirectory()) walk(full, depth + 1)
+      else if (entry.isFile()) out.push(relative(dir, full))
     }
   }
+  walk(dir, 0)
   return out
 }
 
@@ -99,7 +95,9 @@ function resolveTemplate(spec: TemplateSpec, dir: string) {
       : spec.subject,
     htmlBody: spec.htmlBody ?? readOptional(dir, spec.htmlFile),
     textBody: spec.textBody ?? readOptional(dir, spec.textFile),
-    layoutAlias: spec.layoutAlias,
+    layoutAlias:
+      spec.layoutAlias ??
+      (spec.layoutFile !== undefined ? readOptional(dir, spec.layoutFile)?.trim() : undefined),
   }
 }
 
@@ -160,18 +158,14 @@ async function main(): Promise<void> {
         }
         if (!args.apply) continue
         const serverId = await serverIdFromSlug(sql, slug)
-        const inserted = await db
-          .insert(serverTokens)
-          .values(
-            plan.map((entry) => ({
-              serverId,
-              tokenHash: hashToken(entry.token),
-              name: entry.name,
-            })),
-          )
-          .onConflictDoNothing({ target: serverTokens.tokenHash })
-          .returning({ id: serverTokens.id })
-        console.log(`  applied: ${inserted.length} new token(s)`)
+        const store = new PostgresMessageStore(db)
+        for (const entry of plan) {
+          await store.addToken(serverId, entry.token, entry.name, {
+            ...(entry.allowedFrom !== undefined && { allowedFrom: entry.allowedFrom }),
+            ...(entry.logtoConfig !== undefined && { logtoConfig: entry.logtoConfig }),
+          })
+        }
+        console.log(`  applied: ${plan.length} token(s) with client config`)
         continue
       }
 
@@ -181,7 +175,17 @@ async function main(): Promise<void> {
         if (!file || !existsSync(file)) throw new Error(`relay file not found: ${file}`)
         const slug = args.command === 'all' ? 'default' : (slugArg ?? 'default')
         const stream = args.command === 'all' ? 'outbound' : (streamArg ?? 'outbound')
-        const plan = relayPlan(parseEnvFile(readFileSync(file, 'utf8')))
+        const plan = relayPlan(parseEnvFile(readFileSync(file, 'utf8')), {
+          ...(process.env.POSTBOTE_RELAY_HOST !== undefined && {
+            host: process.env.POSTBOTE_RELAY_HOST,
+          }),
+          ...(process.env.POSTBOTE_RELAY_PORT !== undefined && {
+            port: process.env.POSTBOTE_RELAY_PORT,
+          }),
+          ...(process.env.POSTBOTE_RELAY_TLS_MODE !== undefined && {
+            tlsMode: process.env.POSTBOTE_RELAY_TLS_MODE,
+          }),
+        })
         console.log(
           `relay: ${plan.host}:${plan.port} (${plan.tlsMode}) user <redacted> for ${slug}/${stream}`,
         )

@@ -1,4 +1,5 @@
 import nodemailer, { type Transporter } from 'nodemailer'
+import { loadConfig } from '../config/env.js'
 import type { MessageRecord, RelayRecord } from '../core/store.js'
 import { transformForTracking } from './tracking.js'
 
@@ -104,7 +105,10 @@ export class SmtpMailSender implements MailSender {
             ...(a.contentId !== undefined && { cid: a.contentId }),
           })),
         }),
-        headers: (message.headers ?? []).map((h) => ({ key: h.name, value: h.value })),
+        headers: [
+          ...(message.headers ?? []).map((h) => ({ key: h.name, value: h.value })),
+          ...loadConfig().defaultHeaders.map((h) => ({ key: h.name, value: h.value })),
+        ],
       })
       return {
         code: Number.parseInt(/^(\d{3})/.exec(String(info.response))?.[1] ?? '250', 10),

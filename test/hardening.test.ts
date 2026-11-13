@@ -1,9 +1,11 @@
+import type { Transporter } from 'nodemailer'
 import { describe, expect, it, vi } from 'vitest'
 import { buildApp } from '../src/api/app.js'
 import { RateLimiter, checkPreflight, checkSenderAllowed, payloadSize } from '../src/api/policy.js'
 import { MemoryMessageStore } from '../src/core/memory-store.js'
 import { decryptSecret, encryptSecret, isEncrypted } from '../src/core/secret.js'
 import { hashToken } from '../src/core/store.js'
+import { SmtpMailSender } from '../src/worker/sender.js'
 
 const TOKEN = 'harden-token'
 
@@ -144,5 +146,51 @@ describe('API-Härtung', () => {
     expect(batch.json()[0].ErrorCode).toBe(0)
     expect(batch.json()[1].ErrorCode).toBe(300)
     await app.close()
+  })
+})
+
+describe('POSTBOTE_DEFAULT_HEADERS (app01: X-Devolta-Signature)', () => {
+  it('ergänzt Header beim Versand, ohne die Nachricht zu verändern', async () => {
+    vi.stubEnv(
+      'POSTBOTE_DEFAULT_HEADERS',
+      JSON.stringify([{ name: 'X-Devolta-Signature', value: 'skip' }]),
+    )
+    try {
+      const captured: Record<string, unknown>[] = []
+      const fakeTransport = {
+        sendMail: async (options: Record<string, unknown>) => {
+          captured.push(options)
+          return { response: '250 OK' }
+        },
+      } as unknown as Transporter
+      const sender = new SmtpMailSender(new Map(), () => fakeTransport)
+      const message = {
+        id: 'm-h',
+        serverId: 's',
+        streamId: 'outbound',
+        from: 'a@b.de',
+        to: ['c@d.de'],
+        subject: 'x',
+        status: 'queued' as const,
+        submittedAt: new Date().toISOString(),
+        textBody: 'x',
+        headers: [{ name: 'X-Custom', value: '1' }],
+      }
+      const relay = {
+        serverId: 's',
+        streamId: 'outbound',
+        host: 'relay',
+        port: 587,
+        username: 'u',
+        password: 'p',
+        tlsMode: 'starttls' as const,
+      }
+      await sender.send(message, relay, {})
+      const headers = captured[0]?.headers as { key: string; value: string }[] | undefined
+      expect(headers).toContainEqual({ key: 'X-Custom', value: '1' })
+      expect(headers).toContainEqual({ key: 'X-Devolta-Signature', value: 'skip' })
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })

@@ -6,60 +6,80 @@ Rollback. Grundlage: [`BAUPLAN.md` §6](../../BAUPLAN.md) und
 
 > ⚠️ **Sicherheitsregel:** Kein Skript in diesem Verzeichnis verändert ohne
 > explizites `--apply` irgendetwas. Alle Import- und Cut-Over-Schritte sind
-> standardmässig **Dry-Runs**. Container-/Netznamen, Pfade und Tokens stehen
-> **nicht** im Repo — sie kommen aus `app01.env` (Vorlage:
-> `env.app01.example`). Es wurden keine Aktionen gegen app01 ausgeführt.
+> standardmässig **Dry-Runs**. Auf app01 wurde bislang nur **read-only**
+> recherchiert (Netze, Container, Dateistruktur, Connector-Status) — es läuft
+> noch kein v2-Stack.
 
-## Vor dem Start anpassen
+## Realwerte app01 (verifiziert am 13.11.2026)
 
-| Wert | Wo | Prüfen mit |
-|---|---|---|
-| Netzwerk-Namen (`coolify` + 4 Logto-Netze) | `app01.env` | `docker network ls` |
-| Container-Namen v2 / Legacy | `app01.env` | `docker ps --format '{{.Names}}'` |
-| Legacy-Deployment (wer verwaltet es? Coolify?) | organisatorisch | – |
-| Logto-Env-Pfad + Restart-Kommando | `app01.env` | – |
-| Client-Liste (Tokens, Absender, Empfänger) | `smoke/clients.example.json` → eigene Datei | – |
-| DKIM-Selector + Domains | `smoke/domains.example.txt` | `dig` |
-| Postgres-Passwort / `POSTBOTE_BOOTSTRAP_TOKEN` | `app01.env` | – |
+| Wert | Realwert |
+|---|---|
+| Legacy-Container | `postbote` (`devolta/postbote:1`, `/opt/postbote/docker-compose.yml`, **nicht** Coolify) |
+| Legacy-API | `http://postbote:3000`, Alias `postbote` auf 5 Netzen |
+| Netze | `coolify`, `1bbmzl7b9u3rl8ekddhaxutk`, `g86ntufwogji79f7hb1a3ffd`, `swixxxl5wdtvlriahjswr4om`, `zws0ev9f14ri06ailwihgrsd` |
+| Logto-Instanzen | `logto-<uuid>` (4), Connector bereits `http-email` → `http://postbote:3000/logto` |
+| Backups | `/root/postmark-export/<uuid>/connector-row-backup.json` (4× vorhanden) |
+| Relay | `mail.devolta.de:587`, per `extra_hosts` auf `178.63.12.152` gepinnt |
+| Freie Ports | **3002** (3001 belegt), 2526, 588, 5174 |
+| Quellen | `/opt/postbote/tokens.env` (`POSTBOTE_TOKENS=<JSON>`, 6 Clients), `smtp.env` (nur User/Pass), `templates/` (36 Verzeichnisse + `_layouts/basic`) |
+| Clients | `aar-lager`, `lambatec-office`, `logto-devolta`, `logto-servease`, `logto-servease-test`, `logto-servease-demo` |
 
-```bash
-cp deploy/app01/env.app01.example deploy/app01/app01.env
-# app01.env editieren und NIEMALS committen (siehe .gitignore)
-```
+UUID → Client (aus `fromEmail` der Connector-Backups):
 
-Backup von Legacy-Config/DB vor Phase 1:
+| UUID | Client |
+|---|---|
+| `zws0ev9f14ri06ailwihgrsd` | `logto-devolta` |
+| `1bbmzl7b9u3rl8ekddhaxutk` | `logto-servease` |
+| `g86ntufwogji79f7hb1a3ffd` | `logto-servease-test` |
+| `swixxxl5wdtvlriahjswr4om` | `logto-servease-demo` |
 
-```bash
-docker compose -f <legacy-compose> exec postgres pg_dump -U postbote postbote > legacy-$(date +%F).sql
-```
+Die konkrete, **gitignorierte** `app01.env` liegt lokal bereit (generierte
+Secrets, echte Netz-/Containernamen, `POSTBOTE_DEFAULT_HEADERS`, Relay-Fallback).
+**OIDC-Werte sind noch offen** — der Stack läuft mit `POSTBOTE_AUTH_MODE=both`
+auch ohne OIDC; die Logto-Connectoren nutzen statische Bearer-Tokens.
 
 ## Phase 0 — Vorbereitung
 
-- [ ] `app01.env` ausgefüllt, Netz-/Containernamen verifiziert
-- [ ] `POSTBOTE_IMAGE` zeigt auf das getaggte Release (nicht `:latest` in Prod)
-- [ ] DKIM/SPF/DMARC für alle Absender-Domains (inkl. **aar strikte Ausrichtung**)
+- [x] Netz-/Containernamen, Ports, Legacy-Deployment verifiziert
+- [x] `app01.env` erzeugt (Secrets generiert, nicht im Repo)
+- [ ] `app01.env` nach `/opt/postbote-v2/deploy/app01/app01.env` übertragen
+- [ ] OIDC-Werte (Issuer/Audience/SPA-App-ID) nachtragen, falls gewünscht
+- [ ] DKIM/SPF/DMARC für `@devolta.de`, `@servease.de`, `@aar-gastronomie.ch`
+      (inkl. **aar strikte Ausrichtung**)
 - [ ] Rollback-Plan gelesen (`cutover.sh --rollback --apply`)
 
-## Phase 1 — Parallel-Deploy
+## Phase 1 — Parallel-Deploy (additiv, reversibel)
+
+Die GHCR-Packages der Org sind **privat** (kein Pull ohne Login) → auf app01
+aus dem öffentlichen Repo bauen:
 
 ```bash
+ssh app01
+git clone https://github.com/devolta-ug-haftungsbeschraenkt/postbote.git /opt/postbote-v2
+# app01.env nach /opt/postbote-v2/deploy/app01/app01.env kopieren
+cd /opt/postbote-v2
 docker compose -f deploy/app01/docker-compose.app01.yml \
+  -f deploy/app01/docker-compose.build.yml \
+  --env-file deploy/app01/app01.env build
+docker compose -f deploy/app01/docker-compose.app01.yml \
+  -f deploy/app01/docker-compose.build.yml \
   --env-file deploy/app01/app01.env up -d
-docker compose -f deploy/app01/docker-compose.app01.yml \
-  --env-file deploy/app01/app01.env ps
 ```
 
-- v2 läuft auf **Port 3001** intern, SMTP auf **2526/588** (Legacy behält 3000/2525/587).
-- Netz-Alias: `postbote-v2` (API) und `postbote-v2-smtp` (SMTP). Clients sprechen
-  weiterhin `postbote` → Legacy.
-- `migrate` legt Schema, Default-Server, `outbound`-Stream und den Bootstrap-Token an.
+- v2 läuft auf **Port 3002** (3001 ist belegt), SMTP-Host-Ports **2526/588**,
+  UI **5174** (Legacy behält 3000/2525/587).
+- Netz-Alias: `postbote-v2` (API) und `postbote-v2-smtp` (SMTP). Clients
+  sprechen weiterhin `postbote` → Legacy.
+- `migrate` legt Schema (0000–0003), Default-Server, `outbound`-Stream und den
+  Bootstrap-Token an.
+- Der Worker bekommt `extra_hosts: mail.devolta.de:178.63.12.152` (SPF/PTR).
 - **Kein Backfill nötig:** Legacy hat keinen Message-Store, die Historie startet
   mit dem Cut-Over (Bauplan §6.5).
 
 Healthcheck:
 
 ```bash
-curl -fsS http://localhost:3001/health
+curl -fsS http://localhost:3002/health
 ```
 
 ## Phase 2 — Import (dry-run → apply)
@@ -67,19 +87,20 @@ curl -fsS http://localhost:3001/health
 Quellen unter `${POSTBOTE_IMPORT_DIR}` (Default `/opt/postbote`):
 
 ```
-/opt/postbote/
-├── tokens.env              # NAME=TOKEN, ein Token pro Zeile
-├── smtp.env                # SMTP_HOST/PORT/USER/PASS, TLS_MODE
+/opt/postbote/                        # Realstruktur auf app01
+├── tokens.env              # POSTBOTE_TOKENS=<JSON> mit 6 Clients
+│                           # {name, allowedFrom, logto:{from,templates}}
+├── smtp.env                # nur SMTP_USER / SMTP_PASS
 └── templates/
-    ├── manifest.json       # bevorzugt, siehe templates/manifest.example.json
-    ├── layouts/*.html|txt
-    └── <alias>.html|.txt|.subject.txt
+    ├── _layouts/basic/body.html
+    └── <alias>/{body.html,body.txt,subject.txt,layout.txt}   # 36 Stück
 ```
 
 Ausführung **im v2-Container** (das Image enthält `dist/cli/import.js`):
 
 ```bash
-COMPOSE="docker compose -f deploy/app01/docker-compose.app01.yml --env-file deploy/app01/app01.env"
+COMPOSE="docker compose -f deploy/app01/docker-compose.app01.yml \
+  -f deploy/app01/docker-compose.build.yml --env-file deploy/app01/app01.env"
 
 # 1. DRY RUN — zeigt Tokens (nur Hash-Präfix), Relay, Templates/Layouts
 $COMPOSE exec api node dist/cli/import.js all /opt/postbote default
@@ -91,29 +112,31 @@ $COMPOSE exec api node dist/cli/import.js all /opt/postbote default --apply
 Einzeln möglich: `tokens <file>`, `relay <file>`, `templates <dir|manifest.json>`;
 `--only <name>` filtert Token-Keys. **Secrets werden nie geloggt.**
 
-Import-Konvention:
+Import-Konvention (beide Formate unterstützt):
 
-- `tokens.env`: jede `KEY=VALUE`-Zeile ist ein Token; `KEY` wird als Name
-  gespeichert, der Wert nur als SHA-256-Hash (`server_tokens.token_hash`).
-- `smtp.env`: akzeptiert `SMTP_HOST|HOST|RELAY_HOST`, `SMTP_PORT|PORT`,
-  `SMTP_USER|USER|…`, `SMTP_PASS|PASSWORD|…`, `TLS_MODE` (`starttls` Default).
-- `manifest.json`: `layouts[]` und `templates[]` mit `alias`, `name`, `subject`
-  (oder `subjectFile`), `htmlBody|htmlFile`, `textBody|textFile`, `layoutAlias`.
-  Ohne Manifest greift die konventionsbasierte Discovery (`layouts/*.html`,
-  `<alias>.html/.txt`, `<alias>.subject.txt`).
+- `tokens.env`: entweder `KEY=TOKEN` pro Zeile **oder** `POSTBOTE_TOKENS=<JSON>`
+  (app01-Realformat). Pro Client werden `name`, `allowedFrom` und
+  `logto:{from,templates}` übernommen; der Token selbst nur als SHA-256-Hash.
+- `smtp.env`: `SMTP_HOST|HOST|RELAY_HOST`, `SMTP_PORT|PORT`, `SMTP_USER|USER|…`,
+  `SMTP_PASS|PASSWORD|…`, `TLS_MODE`. Fehlende Host/Port/TLS kommen aus
+  `POSTBOTE_RELAY_*` in `app01.env` (auf app01: `mail.devolta.de:587`).
+- Templates: entweder `manifest.json` oder konventionsbasierte Discovery —
+  `<alias>/body.html|body.txt|subject.txt|layout.txt` und
+  `_layouts/<name>/body.html`. `layout.txt` enthält den Layout-Alias (`basic`).
+  Ohne `body.txt` leitet der Renderer den Text aus dem HTML ab.
 
 Nach dem Import gegen die v2-API prüfen:
 
 ```bash
 curl -H "X-Postmark-Server-Token: $POSTBOTE_BOOTSTRAP_TOKEN" \
-  'http://localhost:3001/templates?count=100'
+  'http://localhost:3002/templates?count=100'
 ```
 
 ## Phase 3 — Smoke-Tests auf v2
 
 ```bash
 # Testmail je Client (HTTP + SMTP), Verifikation via /messages/outbound
-POSTBOTE_API_BASE=http://localhost:3001 POSTBOTE_ADMIN_TOKEN=$TOKEN \
+POSTBOTE_API_BASE=http://localhost:3002 POSTBOTE_ADMIN_TOKEN=$TOKEN \
   SMOKE_CLIENTS=deploy/app01/smoke/clients.json \
   node deploy/app01/smoke/smoke-test.mjs
 
