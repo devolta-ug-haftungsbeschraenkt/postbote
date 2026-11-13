@@ -140,3 +140,23 @@ Tags `v*.*.*` publizieren via GitHub Actions:
 
 Multi-Arch (`linux/amd64`, `linux/arm64`). Statt `build:` kann in Compose
 `image: ghcr.io/devolta-ug-haftungsbeschraenkt/postbote:latest` verwendet werden.
+
+### GHCR-Berechtigung bei Organisationen
+
+Der Release-Workflow nutzt standardmässig `GITHUB_TOKEN` mit `packages: write`.
+Bei Repos in einer Organisation kann GitHub das Anlegen **neuer** Packages
+dennoch mit `403 Forbidden` blockieren (Org-Einstellung *Packages → Package
+creation*). Abhilfe, eine von beiden:
+
+1. In den Org-Settings das Anlegen von Container-Packages für Actions
+   erlauben und den Workflow erneut starten.
+2. Einen klassischen PAT mit `write:packages` (+ `read:org`) als Repo-Secret
+   `GHCR_TOKEN` hinterlegen — `docker/login-action` nutzt ihn automatisch
+   statt `GITHUB_TOKEN`.
+
+Danach ohne Force-Push des Tags neu starten:
+
+```bash
+gh workflow run release.yml \
+  --repo devolta-ug-haftungsbeschraenkt/postbote --ref main -f tag=v0.1.0
+```
