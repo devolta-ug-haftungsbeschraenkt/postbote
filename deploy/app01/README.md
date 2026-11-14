@@ -73,6 +73,11 @@ docker compose -f deploy/app01/docker-compose.app01.yml \
 - `migrate` legt Schema (0000–0003), Default-Server, `outbound`-Stream und den
   Bootstrap-Token an.
 - Der Worker bekommt `extra_hosts: mail.devolta.de:178.63.12.152` (SPF/PTR).
+- **DNS-Falle:** Der Postgres-Service heisst im internen Netz `postbote-v2-db`
+  (Alias), nicht `postgres`. Auf app01 gibt es in den externen Netzen weitere
+  Container namens `postgres` — mit dem kurzen Namen würde der API-Container
+  eine fremde DB treffen (`password authentication failed`). Der Alias ist
+  deshalb zwingend; `POSTBOTE_DATABASE_URL` muss ihn verwenden.
 - **Kein Backfill nötig:** Legacy hat keinen Message-Store, die Historie startet
   mit dem Cut-Over (Bauplan §6.5).
 
@@ -103,10 +108,11 @@ COMPOSE="docker compose -f deploy/app01/docker-compose.app01.yml \
   -f deploy/app01/docker-compose.build.yml --env-file deploy/app01/app01.env"
 
 # 1. DRY RUN — zeigt Tokens (nur Hash-Präfix), Relay, Templates/Layouts
-$COMPOSE exec api node dist/cli/import.js all /opt/postbote default
+#    -u root ist nötig: /opt/postbote ist 0700 root, der Container läuft non-root.
+$COMPOSE exec -u root -T api node dist/cli/import.js all /opt/postbote default
 
 # 2. Anwenden (idempotente Upserts)
-$COMPOSE exec api node dist/cli/import.js all /opt/postbote default --apply
+$COMPOSE exec -u root -T api node dist/cli/import.js all /opt/postbote default --apply
 ```
 
 Einzeln möglich: `tokens <file>`, `relay <file>`, `templates <dir|manifest.json>`;

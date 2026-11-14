@@ -45,7 +45,12 @@ services:
       POSTGRES_DB: postbote
     volumes:
       - pgdata_v2:/var/lib/postgresql/data
-    networks: [internal]
+    # Eindeutiger Alias: auf app01 existieren weitere Container namens
+    # "postgres" in den externen Netzen — sonst loest der API-Container die
+    # falsche DB auf (password authentication failed).
+    networks:
+      internal:
+        aliases: [postbote-v2-db]
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postbote']
       interval: 5s
