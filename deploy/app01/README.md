@@ -87,6 +87,9 @@ docker compose -f deploy/app01/docker-compose.app01.yml \
   ausführen (würde den Namen `postbote` zurückbringen).
 - Der Worker hängt zusätzlich am `coolify`-Netz: das reine `internal`-Netz hat
   keinen Egress zu `mail.devolta.de:587`.
+- **Nach jedem `docker compose up -d --force-recreate api`** den Alias erneut
+  setzen: `bash cutover.sh --repair --apply`. Compose setzt sonst nur
+  `postbote-v2` und Clients können `postbote` nicht mehr auflösen.
 - **Kein Backfill nötig:** Legacy hat keinen Message-Store, die Historie startet
   mit dem Cut-Over (Bauplan §6.5).
 

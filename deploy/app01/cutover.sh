@@ -8,6 +8,7 @@
 # sonst antwortet DNS mit zwei IPs (Round-Robin Legacy/v2).
 #
 #   ./cutover.sh                    # DRY RUN: zeigt exakt die Kommandos
+#   ./cutover.sh --repair --apply     # Alias nach Container-Recreate erneut setzen
 #   ./cutover.sh --verify           # zeigt aktuelle Aliase je Netz
 #   ./cutover.sh --apply            # führt den Cut-Over aus
 #   ./cutover.sh --rollback --apply # führt den Rollback aus
@@ -26,6 +27,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --apply) DO_APPLY=1; shift ;;
     --rollback) MODE="rollback"; shift ;;
+    --repair) MODE="repair"; shift ;;
     --verify) MODE="verify"; shift ;;
     --env-file) ENV_FILE="$2"; shift 2 ;;
     -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
@@ -83,6 +85,23 @@ if [[ "$MODE" == "verify" ]]; then
   echo "  $V2         : $(show_aliases "$V2")"
   echo "  $LEGACY_REF : $(show_aliases "$LEGACY_REF")"
   echo "  Hinweis: DNS darf 'postbote' nur noch auf $V2 auflösen."
+  exit 0
+fi
+
+if [[ "$MODE" == "repair" ]]; then
+  # Nach `docker compose up -d --force-recreate api` setzt Compose die Aliase
+  # auf den Default (postbote-v2) zurück. Hier den aktiven Alias erneut
+  # anbringen, ohne Legacy/State anzufassen.
+  echo "Repair: aktiven Alias '$ACTIVE_ALIAS' auf $V2 erneut setzen."
+  for net in "${NETWORKS[@]}"; do
+    run docker network disconnect -f "$net" "$V2"
+    run docker network connect --alias "$ACTIVE_ALIAS" "$net" "$V2"
+  done
+  if [[ "$DO_APPLY" -eq 1 ]]; then
+    echo "Repair ausgeführt."
+  else
+    echo "DRY RUN — nichts geändert. Mit --apply ausführen."
+  fi
   exit 0
 fi
 
