@@ -1,3 +1,4 @@
+import juice from 'juice'
 import nodemailer, { type Transporter } from 'nodemailer'
 import { loadConfig } from '../config/env.js'
 import type { MessageRecord, RelayRecord } from '../core/store.js'
@@ -86,7 +87,11 @@ export class SmtpMailSender implements MailSender {
         fallback.trackingBaseUrl !== undefined
           ? transformForTracking(message, fallback.trackingBaseUrl)
           : null
-      const html = tracked?.html ?? message.htmlBody
+      const rawHtml = tracked?.html ?? message.htmlBody
+      const html =
+        rawHtml !== undefined && /<style\b/i.test(rawHtml)
+          ? juice(rawHtml, { preserveFontFaces: true, preserveMediaQueries: true })
+          : rawHtml
       const text = tracked?.text ?? message.textBody
       const info = await transport.sendMail({
         from: message.from, // envelope sender follows From (DKIM/DMARC-Lektion)

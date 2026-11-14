@@ -120,6 +120,46 @@ describe('M8 Tracking-Transformation', () => {
     expect(String(captured[0]?.html)).toContain('/track/click/m-2')
     expect(String(captured[0]?.text)).toContain('/track/click/m-2')
   })
+
+  it('inlined CSS für E-Mail-Clients und erhält Dark-Mode-Media-Queries', async () => {
+    const captured: Record<string, unknown>[] = []
+    const fakeTransport = {
+      sendMail: async (options: Record<string, unknown>) => {
+        captured.push(options)
+        return { response: '250 OK' }
+      },
+    } as unknown as Transporter
+    const sender = new SmtpMailSender(new Map(), () => fakeTransport)
+    const message: MessageRecord = {
+      id: 'm-3',
+      serverId: 's',
+      streamId: 'outbound',
+      from: 'a@b.de',
+      to: ['c@d.de'],
+      subject: 'x',
+      status: 'queued',
+      submittedAt: new Date().toISOString(),
+      htmlBody:
+        '<html><head><style>.email-wrapper{background-color:#F2F4F6}.email-body_inner{background-color:#FFFFFF}@media (prefers-color-scheme: dark){.email-wrapper{background-color:#0f1416!important}}</style></head><body><table class="email-wrapper"><tr><td><table class="email-body_inner"></table></td></tr></table></body></html>',
+    }
+    const relay: RelayRecord = {
+      serverId: 's',
+      streamId: 'outbound',
+      host: 'relay',
+      port: 587,
+      username: 'u',
+      password: 'p',
+      tlsMode: 'starttls',
+    }
+
+    await sender.send(message, relay, {})
+
+    const html = String(captured[0]?.html)
+    expect(html).toMatch(/class="email-wrapper"[^>]*style="[^"]*background-color:\s*#F2F4F6/i)
+    expect(html).toMatch(/class="email-body_inner"[^>]*style="[^"]*background-color:\s*#FFFFFF/i)
+    expect(html).toMatch(/@media\s*\(prefers-color-scheme:\s*dark\)/i)
+    expect(html).toMatch(/background-color:\s*#0f1416\s*!important/i)
+  })
 })
 
 describe('M8 Message-Streams', () => {
