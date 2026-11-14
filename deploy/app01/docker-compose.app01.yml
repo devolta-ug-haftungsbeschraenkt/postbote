@@ -113,7 +113,12 @@ services:
     # Mailcow-Relay ist per extra_hosts auf die IPv4-Adresse gepinnt (SPF/PTR).
     extra_hosts:
       - '${POSTBOTE_RELAY_HOSTNAME:-mail.devolta.de}:${POSTBOTE_RELAY_IP:-178.63.12.152}'
-    networks: [internal]
+    # Das reine internal-Netz hat keinen Egress; der Worker braucht
+    # mail.devolta.de:587. `coolify` hat Internet-Zugang (wie das Legacy-Setup).
+    networks:
+      internal: {}
+      coolify:
+        aliases: [postbote-v2-worker]
     depends_on:
       postgres:
         condition: service_healthy

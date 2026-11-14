@@ -78,6 +78,15 @@ docker compose -f deploy/app01/docker-compose.app01.yml \
   Container namens `postgres` — mit dem kurzen Namen würde der API-Container
   eine fremde DB treffen (`password authentication failed`). Der Alias ist
   deshalb zwingend; `POSTBOTE_DATABASE_URL` muss ihn verwenden.
+- **Zweite DNS-Falle:** Docker löst auch **Containernamen** auf. Der Legacy-
+  Container hiess `postbote` — ein reiner Alias-Swap würde `postbote` auf
+  **zwei** IPs auflösen (Round-Robin). `cutover.sh` benennt ihn deshalb in
+  `postbote-legacy` um und benennt beim Rollback zurück. Nach dem Cut-Over
+  `/opt/postbote/token.sh` auf `postbote-legacy` umstellen. Während des
+  Rollback-Fensters **kein** `docker compose up -d` in `/opt/postbote`
+  ausführen (würde den Namen `postbote` zurückbringen).
+- Der Worker hängt zusätzlich am `coolify`-Netz: das reine `internal`-Netz hat
+  keinen Egress zu `mail.devolta.de:587`.
 - **Kein Backfill nötig:** Legacy hat keinen Message-Store, die Historie startet
   mit dem Cut-Over (Bauplan §6.5).
 

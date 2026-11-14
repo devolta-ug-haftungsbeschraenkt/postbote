@@ -2,8 +2,10 @@
 # postbote app01 Cut-Over (Bauplan §6 / M7)
 #
 # Clients sprechen den Service-Namen `postbote` auf den gemeinsamen Docker-
-# Netzen. Der Cut-Over verschiebt diesen Netz-Alias vom Legacy-Container auf
-# den v2-API-Container; Legacy behält `postbote-legacy` als Rollback.
+# Netzen. Der Cut-Over verschiebt diesen Namen auf den v2-API-Container.
+# WICHTIG: Docker loest auch ContainerNAMEN per DNS auf — der Legacy-Container
+# muss deshalb zusaetzlich umbenannt werden (`postbote` -> `postbote-legacy`),
+# sonst antwortet DNS mit zwei IPs (Round-Robin Legacy/v2).
 #
 #   ./cutover.sh                    # DRY RUN: zeigt exakt die Kommandos
 #   ./cutover.sh --verify           # zeigt aktuelle Aliase je Netz
@@ -26,7 +28,7 @@ while [[ $# -gt 0 ]]; do
     --rollback) MODE="rollback"; shift ;;
     --verify) MODE="verify"; shift ;;
     --env-file) ENV_FILE="$2"; shift 2 ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -49,13 +51,20 @@ NETWORKS_CSV="${POSTBOTE_CLIENT_NETWORKS:-coolify}"
 
 IFS=',' read -r -a NETWORKS <<< "$NETWORKS_CSV"
 
+container_exists() { docker inspect "$1" >/dev/null 2>&1; }
+container_running() {
+  docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -q true
+}
+
+# Nach einem Cut-Over heisst der Legacy-Container postbote-legacy.
+LEGACY_REF="$LEGACY"
+if ! container_exists "$LEGACY" && container_exists "$LEGACY_ALIAS"; then
+  LEGACY_REF="$LEGACY_ALIAS"
+fi
+
 run() {
   echo "  $*"
   if [[ "$DO_APPLY" -eq 1 ]]; then "$@"; fi
-}
-
-container_running() {
-  docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -q true
 }
 
 show_aliases() {
@@ -64,15 +73,16 @@ show_aliases() {
 
 echo "postbote cutover — mode=$MODE apply=$DO_APPLY"
 echo "  v2 container     : $V2"
-echo "  legacy container : $LEGACY"
+echo "  legacy container : $LEGACY_REF (original: $LEGACY)"
 echo "  netze            : ${NETWORKS[*]}"
 echo "  aliases          : active=$ACTIVE_ALIAS v2=$V2_ALIAS legacy=$LEGACY_ALIAS"
 echo
 
 if [[ "$MODE" == "verify" ]]; then
   echo "Aktuelle Netz-Aliase:"
-  echo "  $V2     : $(show_aliases "$V2")"
-  echo "  $LEGACY : $(show_aliases "$LEGACY")"
+  echo "  $V2         : $(show_aliases "$V2")"
+  echo "  $LEGACY_REF : $(show_aliases "$LEGACY_REF")"
+  echo "  Hinweis: DNS darf 'postbote' nur noch auf $V2 auflösen."
   exit 0
 fi
 
@@ -87,9 +97,12 @@ if [[ "$MODE" == "rollback" ]]; then
   for net in "${NETWORKS[@]}"; do
     run docker network disconnect -f "$net" "$V2"
     run docker network connect --alias "$V2_ALIAS" "$net" "$V2"
-    run docker network disconnect -f "$net" "$LEGACY"
-    run docker network connect --alias "$ACTIVE_ALIAS" "$net" "$LEGACY"
+    run docker network disconnect -f "$net" "$LEGACY_REF"
+    run docker network connect --alias "$ACTIVE_ALIAS" "$net" "$LEGACY_REF"
   done
+  if [[ "$LEGACY_REF" != "$LEGACY" ]]; then
+    run docker rename "$LEGACY_REF" "$LEGACY"
+  fi
   if [[ "$DO_APPLY" -eq 1 ]]; then
     mv "$STATE_FILE" "$STATE_FILE.rolled-back.$(date +%Y%m%d-%H%M%S)"
     echo "Rollback ausgeführt."
@@ -106,7 +119,7 @@ if [[ -f "$STATE_FILE" ]]; then
 fi
 
 if [[ "$DO_APPLY" -eq 1 ]]; then
-  for container in "$V2" "$LEGACY"; do
+  for container in "$V2" "$LEGACY_REF"; do
     if ! container_running "$container"; then
       echo "FEHLER: Container '$container' läuft nicht." >&2
       exit 1
@@ -119,10 +132,14 @@ if [[ "$DO_APPLY" -eq 1 ]]; then
   fi
 fi
 
-echo "Kommandos (Reihenfolge: Legacy-Alias zuerst weg, dann v2 übernimmt):"
+echo "Kommandos (Rename zuerst, dann Alias-Swap je Netz):"
+if [[ "$LEGACY_REF" = "$LEGACY" ]]; then
+  run docker rename "$LEGACY" "$LEGACY_ALIAS"
+  LEGACY_REF="$LEGACY_ALIAS"
+fi
 for net in "${NETWORKS[@]}"; do
-  run docker network disconnect -f "$net" "$LEGACY"
-  run docker network connect --alias "$LEGACY_ALIAS" "$net" "$LEGACY"
+  run docker network disconnect -f "$net" "$LEGACY_REF"
+  run docker network connect --alias "$LEGACY_ALIAS" "$net" "$LEGACY_REF"
   run docker network disconnect -f "$net" "$V2"
   run docker network connect --alias "$ACTIVE_ALIAS" "$net" "$V2"
 done
@@ -132,14 +149,16 @@ if [[ "$DO_APPLY" -eq 1 ]]; then
     echo "mode=cutover"
     echo "applied_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "v2_container=$V2"
-    echo "legacy_container=$LEGACY"
+    echo "legacy_container=$LEGACY_REF"
+    echo "legacy_original=$LEGACY"
+    echo "legacy_renamed=true"
     echo "networks=$NETWORKS_CSV"
     echo "active_alias=$ACTIVE_ALIAS"
     echo "v2_alias=$V2_ALIAS"
     echo "legacy_alias=$LEGACY_ALIAS"
   } > "$STATE_FILE"
   echo "Cut-Over ausgeführt. State: $STATE_FILE"
-  echo "NÄCHSTER SCHRITT: Smoke-Tests (deploy/app01/smoke/) und 2 Wochen beobachten."
+  echo "NÄCHSTER SCHRITT: DNS prüfen (postbote darf nur noch $V2 sein) und 2 Wochen beobachten."
 else
   echo
   echo "DRY RUN — nichts geändert. Mit --apply ausführen."
