@@ -24,6 +24,10 @@ export function checkSenderAllowed(
   const allowed = allowlist.some((entry) => {
     const pattern = entry.trim().toLowerCase()
     if (pattern.startsWith('*@')) return address.endsWith(pattern.slice(1))
+    // Legacy-Semantik (app01/tokens.env): Regel ohne '@' gilt für die Domain.
+    if (!pattern.includes('@')) {
+      return address.split('@')[1] === pattern
+    }
     return address === pattern
   })
   if (allowed) return null

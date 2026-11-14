@@ -52,6 +52,16 @@ describe('Policy-Helfer', () => {
     expect(
       checkSenderAllowed({ ...token, allowedFrom: ['*@devolta.de'] }, 'Max <max@devolta.de>'),
     ).toBeNull()
+    // app01-Realformat: nackte Domain ohne '@'
+    expect(
+      checkSenderAllowed(
+        { ...token, allowedFrom: ['aar-gastronomie.ch'] },
+        'lager <x@aar-gastronomie.ch>',
+      ),
+    ).toBeNull()
+    expect(
+      checkSenderAllowed({ ...token, allowedFrom: ['aar-gastronomie.ch'] }, 'x@devolta.de'),
+    ).toMatchObject({ ErrorCode: 1480 })
     const denied = checkSenderAllowed({ ...token, allowedFrom: ['*@devolta.de'] }, 'x@example.com')
     expect(denied?.ErrorCode).toBe(1480)
   })
