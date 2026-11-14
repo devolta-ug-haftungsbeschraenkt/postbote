@@ -38,14 +38,24 @@ export async function renderTemplate(
     for (const e of html.errors) errors.push({ part: 'htmlbody', message: e.message, line: e.line })
     htmlBody = html.value
 
-    // Layout (Postmark-Parität: Template erbt von LayoutTemplate).
+    // Layout (Postmark-Parität: Template erbt von LayoutTemplate). Das Layout
+    // ist selbst ein Mustache-Template und wird mit demselben Modell gerendert.
     if (template.layoutAlias) {
       const layout = await store.findLayout(serverId, template.layoutAlias)
       if (layout) {
-        htmlBody = applyLayout(layout.htmlBody, htmlBody ?? '').value
-        if (textBody === undefined && layout.textBody) {
-          const layoutText = renderPart(layout.textBody, model, false)
-          textBody = layoutText.value.replace(/\{\{\s*@content\s*\}\}/g, '')
+        const layoutHtml = applyLayout(layout.htmlBody, htmlBody ?? '', model, true)
+        for (const e of layoutHtml.errors) {
+          errors.push({ part: 'layout', message: e.message, line: e.line })
+        }
+        htmlBody = layoutHtml.value
+
+        if (textBody === undefined && layout.textBody !== undefined) {
+          const innerText = deriveTextFromHtml(html.value)
+          const layoutText = applyLayout(layout.textBody, innerText, model, false)
+          for (const e of layoutText.errors) {
+            errors.push({ part: 'layout-text', message: e.message, line: e.line })
+          }
+          textBody = layoutText.value
         }
       }
     }

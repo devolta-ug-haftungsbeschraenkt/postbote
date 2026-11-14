@@ -265,14 +265,32 @@ export function renderPart(source: string, model: unknown, escapeVariables: bool
   return { value, errors }
 }
 
-/** Layout support: insert rendered content into `{{{content}}}` / `{{@content}}`. */
-export function applyLayout(layoutSource: string, content: string): RenderedPart {
+/** Layout support: insert rendered content into `{{{content}}}` / `{{@content}}`
+ * AND render the layout itself with the same model (app01 layouts contain
+ * `{{#application}}`, `{{^logoUrl}}`, `{{../../name}}`, `{{{.}}}` etc.).
+ * Sentinels keep the already-rendered content out of the second render pass.
+ */
+const RAW_CONTENT = '\u0000PB_CONTENT_RAW\u0000'
+const ESC_CONTENT = '\u0000PB_CONTENT_ESC\u0000'
+
+export function applyLayout(
+  layoutSource: string,
+  content: string,
+  model: unknown = {},
+  escapeVariables = true,
+): RenderedPart {
   const source = layoutSource
-    .replace(/\{\{\{\s*content\s*\}\}\}/g, content)
-    .replace(/\{\{\{\s*@content\s*\}\}\}/g, content)
-    .replace(/\{\{\s*@content\s*\}\}/g, escapePostmark(content))
-    .replace(/\{\{\s*content\s*\}\}/g, escapePostmark(content))
-  return { value: source, errors: [] }
+    .replace(/\{\{\{\s*@?content\s*\}\}\}/g, RAW_CONTENT)
+    .replace(/\{\{\s*@?content\s*\}\}/g, ESC_CONTENT)
+  const rendered = renderPart(source, model, escapeVariables)
+  return {
+    value: rendered.value
+      .split(RAW_CONTENT)
+      .join(content)
+      .split(ESC_CONTENT)
+      .join(escapePostmark(content)),
+    errors: rendered.errors,
+  }
 }
 
 /**

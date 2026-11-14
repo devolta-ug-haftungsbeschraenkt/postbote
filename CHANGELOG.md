@@ -6,6 +6,15 @@ Alle nennenswerten Änderungen an postbote. Format orientiert sich an
 
 ## [Unreleased]
 
+### Fix: Layout-Templates wurden nicht gerendert (app01-Vorfall)
+
+- Nach dem Cut-Over enthielten echte Logto-Mails rohe Mustache-Tags aus dem
+  Layout (`{{#application}}`, `{{^logoUrl}}`, `{{../../name}}`). Ursache:
+  `applyLayout()` ersetzte nur `{{{@content}}}`, rendierte das Layout aber nicht
+  selbst. Jetzt wird das Layout mit demselben Modell gerendert (Sentinel-Ansatz,
+  damit der Content nicht doppelt durch den Renderer läuft); Layout-Fehler
+  landen in `/templates/validate`. 5 Golden-Tests gegen die app01-Struktur.
+
 ### app01-Deploy: Blocker geschlossen
 
 - `POST /logto` nach Legacy-Vertrag (`{to,type,payload}`, Bearer-Token,
