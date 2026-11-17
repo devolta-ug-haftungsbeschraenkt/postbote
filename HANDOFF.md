@@ -263,3 +263,49 @@ Vorfall (rohe Mustache-Tags in Anmeldemails) ist behoben und gegen die echten
 Templates verifiziert; eine Smoke-Mail wurde zugestellt (`status=sent`).
 **Offen:** OIDC/Logto-Realwerte, Smoke-Tests je Client, `v0.1.1`-Release,
 2-Wochen-Beobachtung, Legacy-Abschaltung.
+
+---
+
+## 10. Nachtrag 17.11.2026 (Stand-Wechsel)
+
+Seit dem Handoff ist `main` weitergewandert; **nicht alle Änderungen sind auf
+app01 deployt**:
+
+| Commit | Inhalt | CI | app01 |
+|---|---|---|---|
+| `103f599` | HANDOFF.md | grün | gezogen (Doku, harmlos) |
+| `5fc9c8c` | **`fix(mail): inline CSS before SMTP delivery`** — neue Dependency `juice` (`^12.2.3`), `src/worker/sender.ts` + 40 Zeilen Tests in `test/m8.test.ts` | grün | **nur gezogen, NICHT gebaut** |
+
+Verifiziert am 17.11.:
+- Repo: `main` @ `5fc9c8c`, Arbeitsbaum sauber, 128 Tests grün (+5 PG
+  skipped), `tsc`/Biome/Build clean.
+- app01: `/opt/postbote-v2` @ `5fc9c8c`, aber
+  `postbote-v2-api-1` **created 2026-11-14**, `require('juice')` →
+  `MODULE_NOT_FOUND`. Der Fix ist also **nicht live**.
+- Cut-Over weiterhin intakt: `postbote` → `172.19.0.59` (nur v2), Aliase auf
+  allen 5 Netzen `[postbote]`, Legacy `postbote-legacy` läuft,
+  `/health` OK.
+- Lokal: Demo-API :3000 läuft, **Vite-UI :5173 ist beendet** (Dev-Server
+  `state=completed`; kein Fehler im Log). Ein fremder `infisical run … vite`-
+  Prozess und ein Vite aus `~/Documents/dev/servease/servease-frontend` laufen
+  noch, gehören aber nicht zu postbote.
+
+**Zum Ausrollen von `5fc9c8c` auf app01 (bekanntes Procedere):**
+```bash
+ssh app01
+cd /opt/postbote-v2
+docker compose -f deploy/app01/docker-compose.app01.yml \
+  -f deploy/app01/docker-compose.build.yml \
+  --env-file deploy/app01/app01.env build
+docker compose -f deploy/app01/docker-compose.app01.yml \
+  -f deploy/app01/docker-compose.build.yml \
+  --env-file deploy/app01/app01.env up -d --force-recreate api worker smtp
+cd deploy/app01 && bash cutover.sh --repair --apply   # ZWINGEND nach Recreate
+```
+Danach prüfen: `docker exec postbote-v2-api-1 node -e "require('juice')"`,
+DNS `postbote` auf allen 5 Netzen, `/health`, `/deliverystats`, eine
+Smoke-Mail mit HTML/CSS.
+
+Der `5fc9c8c`-Commit stammt **nicht** aus dieser Session — vor Änderungen an
+`sender.ts` / `test/m8.test.ts` / `package.json` kurz mit dem User klären,
+damit nichts überschrieben wird.
